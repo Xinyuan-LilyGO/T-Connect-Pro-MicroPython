@@ -6,7 +6,7 @@
  * @LastEditTime: 2025-05-12 15:13:14
  * @License: GPL 3.0
 -->
-<h1 align = "center">T-Connect-Pro</h1>
+<h1 align = "center">T-Connect-Pro-MicroPython</h1>
 
 ## **[English](./README.md) | 中文**
 
