@@ -7,7 +7,11 @@
  * @License: GPL 3.0
 -->
 
+<<<<<<< HEAD
 <h1 align = "center">T-Connect-Pro-Micropython</h1>
+=======
+<h1 align = "center">T-Connect-Pro-MicroPython</h1>
+>>>>>>> 82810ddefc4e5683de1dbf1cc8fb486c608ea16f
 
 ## **English | [中文](./README_CN.md)**
 
@@ -169,7 +173,7 @@ T-Connect-Pro is a product based on the ESP32S3 main control chip, consisting of
 
 9. Click on "<kbd>[Device Connected/Disconnected](image/1.png)</kbd>" at the lower left corner, and then click on the pop-up window "<kbd>[COMX](image/2.png)</kbd>" at the top to connect the serial port. A pop-up pops up at the lower right corner saying "<kbd>[Connection successful](image/3.png)</kbd>" and the connection is complete.
 
-10. After opening the code, click on“<kbd>[▶](image/4.png)</kbd>”at the lower left corner to run the program“<kbd>[Run this MIC Python file directly on the device](image/5.png)</kbd>”，Or use the<kbd>Alt</kbd>+<kbd>Q</kbd>），if you want to stop the program, click on the lower left corner of the“<kbd>[⏹](image/6.png)</kbd>”stop running the program.
+10. After opening the code, click on“<kbd>[▶](image/4.png)</kbd>”at the lower left corner to run the program“<kbd>[Run this MicroPython file directly on the device](image/5.png)</kbd>”，Or use the<kbd>Alt</kbd>+<kbd>Q</kbd>），if you want to stop the program, click on the lower left corner of the“<kbd>[⏹](image/6.png)</kbd>”stop running the program.
 
 ## PinOverview
 
