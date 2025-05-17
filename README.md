@@ -126,8 +126,8 @@ T-Connect-Pro is a product based on the ESP32S3 main control chip, consisting of
 
 | Firmware | Description | Picture |
 | ------  | ------  | ------ |
-| [T-Connect-Pro_LVGL_MicroPython_firmware_V1.0](./firmware/T-Connect-Pro_LVGL_MicroPython_firmware_V1.0.bin) | hava lvgl |  |
-| [T-Connect-Pro_MicroPython_firmware(import_CAN)_V1.0](./firmware/T-Connect-Pro_MicroPython_firmware(import_CAN)_V1.0.bin) | havl CAN | |
+| [T-Connect-Pro_LVGL_MicroPython_firmware_V1.0](./firmware/T-Connect-Pro_LVGL_MicroPython_firmware_V1.0.bin) | have lvgl |  |
+| [T-Connect-Pro_MicroPython_firmware(import_CAN)_V1.0](./firmware/T-Connect-Pro_MicroPython_firmware(import_CAN)_V1.0.bin) | have CAN | |
 
 ### RT-Thread MicroPython
 1. Install [Python](https://www.python.org/downloads/) (according to you to download the corresponding operating system version, suggest to download version 3.7 or later), MicroPython requirement 3. X version, if you have already installed, you can skip this step).
