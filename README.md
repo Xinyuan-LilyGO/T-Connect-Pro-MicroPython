@@ -3,18 +3,18 @@
  * @Description: None
  * @Author: LILYGO
  * @Date: 2025-05-12 15:13:14
- * @LastEditTime: 2025-05-12 15:13:14
+ * @LastEditTime: 2025-05-17 17:40:18
  * @License: GPL 3.0
 -->
 
-<h1 align = "center">T-Connect-Pro</h1>
+<h1 align = "center">T-Connect-Pro-Micropython</h1>
 
 ## **English | [中文](./README_CN.md)**
 
 ## VersionIteration:
 | Version                              | Update date                       |
 | :-------------------------------: | :-------------------------------: |
-| T-Connect-Pro_V1.0                      | 2025-05-12                  |
+| T-Connect-Pro-Micropython_V1.0        | 2025-05-17                 |
 
 ## PurchaseLink
 
@@ -109,27 +109,25 @@ T-Connect-Pro is a product based on the ESP32S3 main control chip, consisting of
 
 | Example | `[RT-Thread MicroPython][1.0.11]`<br /> | Description | Picture |
 | ------  | ------ | ------ | ------ |
-| [CAN](./examples/CAN) |   | | |
+| [CAN](./examples/CAN) | <p align="center">![alt text][supported] | | |
 | [CST226SE](./examples/CST226SE) |  <p align="center">![alt text][supported] | | |
 | [Ethernet_HTTP](./examples/Ethernet_HTTP) |  <p align="center">![alt text][supported] | | |
 | [Ethernet_Relay](./examples/Ethernet_Relay) |  <p align="center">![alt text][supported] | | |
 | [Ethernet_Scan](./examples/Ethernet_Scan) |  <p align="center">![alt text][supported] | | |
-| [GFX](./examples/GFX) |   | | |
+| [GFX](./examples/GFX) | <p align="center">![alt text][supported] | | |
 | [GFX_SX1262](./examples/GFX_SX1262) |   | | |
 | [Original_Test](./examples/Original_Test) |   | Original factory program | |
 | [Relay](./examples/Relay) |  <p align="center">![alt text][supported] | | |
-| [RS485](./examples/RS485) |   | | |
-| [RS485_2](./examples/RS485_2) |   | | |
-| [SX126x_Channel_Activity_Detection_Blocking](./examples/SX126x_Channel_Activity_Detection_Blocking) |   | | |
-| [SX126x_Channel_Activity_Detection_Interrupt](./examples/SX126x_Channel_Activity_Detection_Interrupt) |   | | |
-| [SX126x_PingPong](./examples/SX126x_PingPong) |   | | |
-| [SX1262_Receive_Interrupt](./examples/SX1262_Receive_Interrupt) |   | | |
+| [RS485](./examples/RS485) | <p align="center">![alt text][supported] | | |
+| [RS485_2](./examples/RS485_2) | <p align="center">![alt text][supported] | | |
+| [SX126x_PingPong](./examples/SX126x_PingPong) | <p align="center">![alt text][supported] | | |
 
 [supported]: https://img.shields.io/badge/-supported-green "example"
 
 | Firmware | Description | Picture |
 | ------  | ------  | ------ |
-| [T-Connect-Pro_MicroPython_firmware_V1.0](./firmware/T-Connect-Pro_MicroPython_firmware_V1.0.bin) |  |  |
+| [T-Connect-Pro_LVGL_MicroPython_firmware_V1.0](./firmware/T-Connect-Pro_LVGL_MicroPython_firmware_V1.0.bin) | hava lvgl |  |
+| [T-Connect-Pro_MicroPython_firmware(import_CAN)_V1.0](./firmware/T-Connect-Pro_MicroPython_firmware(import_CAN)_V1.0.bin) | havl CAN | |
 
 ### RT-Thread MicroPython
 1. Install [Python](https://www.python.org/downloads/) (according to you to download the corresponding operating system version, suggest to download version 3.7 or later), MicroPython requirement 3. X version, if you have already installed, you can skip this step).
