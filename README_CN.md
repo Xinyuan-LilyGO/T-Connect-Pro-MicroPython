@@ -3,7 +3,7 @@
  * @Description: None
  * @Author: LILYGO
  * @Date: 2025-05-12 15:13:14
- * @LastEditTime: 2025-05-17 17:40:18
+ * @LastEditTime: 2025-05-23 17:40:18
  * @License: GPL 3.0
 -->
 <h1 align = "center">T-Connect-Pro-MicroPython</h1>
@@ -12,7 +12,7 @@
 ## 版本迭代:
 | Version                               | Update date                       |
 | :-------------------------------: | :-------------------------------: |
-| T-Connect-Pro-Micropython_V1.0          | 2025-05-17                    |
+| T-Connect-Pro-Micropython_V1.0          | 2025-05-23                  |
 
 ## 购买链接
 
@@ -112,8 +112,8 @@ T-Connect-Pro基于主控芯片ESP32S3，由3层板子堆叠组合而成的产�
 | [Ethernet_Relay](./examples/Ethernet_Relay) |  <p align="center">![alt text][supported] | | |
 | [Ethernet_Scan](./examples/Ethernet_Scan) |  <p align="center">![alt text][supported] | | |
 | [GFX](./examples/GFX) | <p align="center">![alt text][supported] | | |
-| [GFX_SX1262](./examples/GFX_SX1262) |   | | |
-| [Original_Test](./examples/Original_Test) |   | 出厂程序 | |
+| [GFX_SX1262](./examples/GFX_SX1262) | <p align="center">![alt text][supported] | | |
+| [Original_Test](./examples/Original_Test) | <p align="center">![alt text][supported] | 出厂程序 | |
 | [Relay](./examples/Relay) |  <p align="center">![alt text][supported] | | |
 | [RS485](./examples/RS485) | <p align="center">![alt text][supported] | | |
 | [RS485_2](./examples/RS485_2) | <p align="center">![alt text][supported] | | |
@@ -123,8 +123,7 @@ T-Connect-Pro基于主控芯片ESP32S3，由3层板子堆叠组合而成的产�
 
 | Firmware | Description | Picture |
 | ------  | ------  | ------ |
-| [T-Connect-Pro_LVGL_MicroPython_firmware_V1.0](./firmware/T-Connect-Pro_LVGL_MicroPython_firmware_V1.0.bin) | 带LVGL库 |  |
-| [T-Connect-Pro_MicroPython_firmware(import_CAN)_V1.0](./firmware/T-Connect-Pro_MicroPython_firmware(import_CAN)_V1.0.bin) | 带CAN库 | |
+| [T-Connect-Pro_LVGL_MicroPython_firmware_V1.0](./firmware/T-Connect-Pro_LVGL_MicroPython_firmware_V1.0.bin) |  |  |
 
 ### RT-Thread MicroPython
 1. 安装[Python](https://www.python.org/downloads/)（根据你操作系统下载相应的版本即可，建议下载3.7或以后的版本即可），MicroPython要求3.x的版本，如果已经安装，可以跳过此步骤）。

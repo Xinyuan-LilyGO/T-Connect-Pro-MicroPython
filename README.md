@@ -3,7 +3,7 @@
  * @Description: None
  * @Author: LILYGO
  * @Date: 2025-05-12 15:13:14
- * @LastEditTime: 2025-05-17 17:40:18
+ * @LastEditTime: 2025-05-26 17:40:18
  * @License: GPL 3.0
 -->
 
@@ -13,7 +13,7 @@
 ## VersionIteration:
 | Version                              | Update date                       |
 | :-------------------------------: | :-------------------------------: |
-| T-Connect-Pro-Micropython_V1.0        | 2025-05-17                 |
+| T-Connect-Pro-Micropython_V1.0        | 2025-05-23               |
 
 ## PurchaseLink
 
@@ -114,8 +114,8 @@ T-Connect-Pro is a product based on the ESP32S3 main control chip, consisting of
 | [Ethernet_Relay](./examples/Ethernet_Relay) |  <p align="center">![alt text][supported] | | |
 | [Ethernet_Scan](./examples/Ethernet_Scan) |  <p align="center">![alt text][supported] | | |
 | [GFX](./examples/GFX) | <p align="center">![alt text][supported] | | |
-| [GFX_SX1262](./examples/GFX_SX1262) |   | | |
-| [Original_Test](./examples/Original_Test) |   | Original factory program | |
+| [GFX_SX1262](./examples/GFX_SX1262) | <p align="center">![alt text][supported] | | |
+| [Original_Test](./examples/Original_Test) | <p align="center">![alt text][supported] | Original factory program | |
 | [Relay](./examples/Relay) |  <p align="center">![alt text][supported] | | |
 | [RS485](./examples/RS485) | <p align="center">![alt text][supported] | | |
 | [RS485_2](./examples/RS485_2) | <p align="center">![alt text][supported] | | |
@@ -125,8 +125,7 @@ T-Connect-Pro is a product based on the ESP32S3 main control chip, consisting of
 
 | Firmware | Description | Picture |
 | ------  | ------  | ------ |
-| [T-Connect-Pro_LVGL_MicroPython_firmware_V1.0](./firmware/T-Connect-Pro_LVGL_MicroPython_firmware_V1.0.bin) | hava lvgl |  |
-| [T-Connect-Pro_MicroPython_firmware(import_CAN)_V1.0](./firmware/T-Connect-Pro_MicroPython_firmware(import_CAN)_V1.0.bin) | havl CAN | |
+| [T-Connect-Pro_LVGL_MicroPython_firmware_V1.0](./firmware/T-Connect-Pro_LVGL_MicroPython_firmware_V1.0.bin) |  |  |
 
 ### RT-Thread MicroPython
 1. Install [Python](https://www.python.org/downloads/) (according to you to download the corresponding operating system version, suggest to download version 3.7 or later), MicroPython requirement 3. X version, if you have already installed, you can skip this step).

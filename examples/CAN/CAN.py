@@ -1,5 +1,5 @@
 import time
-import CAN
+from machine import CAN
 
 # Define CAN device initialization
 dev = CAN(0, extframe=False, tx=6, rx=7, mode=CAN.NORMAL, bitrate=1000000)

@@ -9,6 +9,10 @@ class ST7796:
     GREEN = const(0x07E0)
     BLUE = const(0x001F)
     YELLOW = const(0xFFE0)
+    PALERED = const(0xFDB8)     # 浅红色
+    PURPLE = const(0x8010)     # 紫色
+    ORANGE = const(0x7e0)     # 橙色
+    DARKGREEN = const(0xd79c)  # 深绿色
     
     # Rotation constants
     ROTATE_0 = 0
@@ -125,8 +129,12 @@ class ST7796:
         self.write_command(0x3A)  # Interface Pixel Format
         self.write_data(0x55)  # 16-bit color
         self.write_command(0x29)  # Display on
-        self.backlight.value(1)  
-
+        self.backlight.value(1)
+        
+#     def set_backlight(self, duty):
+#         """设置背光亮度，duty 应该在 0（最暗）到 1023（最亮）之间"""
+#         self.backlight.duty(duty)
+        
     def set_window(self, x0, y0, x1, y1):
         self.write_command(0x2A)  # Column address set
         self.write_data((x0 >> 8) & 0xFF)
@@ -141,11 +149,15 @@ class ST7796:
         self.write_command(0x2C)  # Memory write
 
     def fillScreen(self, x, y, color, width=480, height=320):
+        # 考虑旋转角度
+        if self.rotation == self.ROTATE_90 or self.rotation == self.ROTATE_270:
+            width, height = height, width  # 如果旋转90°或270°，宽高需要交换
+
         self.set_window(x, y, x + width - 1, y + height - 1)
         self.dc.value(1)
         self.cs.value(0)
 
-        for i in range(height): 
+        for i in range(height):
             row_buffer = bytearray([color >> 8, color & 0xFF] * width)
             self.spi.write(row_buffer)
 
@@ -228,11 +240,16 @@ class ST7796:
             'y': [0x00, 0x00, 0x66, 0x66, 0x66, 0x3E, 0x06, 0x3C],
             'z': [0x00, 0x00, 0x7E, 0x0C, 0x18, 0x30, 0x7E, 0x00],
             '-': [0x00, 0x00, 0x00, 0x00, 0x7E, 0x00, 0x00, 0x00],
-            '<': [0x00, 0x06, 0x0C, 0x18, 0x0C, 0x06, 0x00, 0x00],
+            '<': [0x00, 0x06, 0x0C, 0x18, 0x30, 0x18, 0x0C, 0x06],
             '[': [0x3C, 0x30, 0x30, 0x30, 0x30, 0x30, 0x3C, 0x00],
             ']': [0x3C, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x3C, 0x00],
             ':': [0x00, 0x18, 0x18, 0x00, 0x00, 0x18, 0x18, 0x00],
             '.': [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x18],
+            '>': [0x00, 0x30, 0x18, 0x0C, 0x06, 0x0C, 0x18, 0x30],
+            '*': [0x00, 0x00, 0x18, 0x7E, 0x18, 0x00, 0x00, 0x00],  # 添加 *
+            '(': [0x00, 0x0C, 0x18, 0x30, 0x30, 0x30, 0x18, 0x0C],  # 添加 (
+            ')': [0x00, 0x30, 0x18, 0x0C, 0x0C, 0x0C, 0x18, 0x30],  # 添加 )
+            '/': [0x00, 0x02, 0x04, 0x08, 0x10, 0x20, 0x00, 0x00],  # 添加 /
             # 空格
             ' ': [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
         }
@@ -269,28 +286,37 @@ class ST7796:
             # 计算每个字符的位置，增加字符间距
             self.draw_char(x + i * (8 * size + spacing), y, char, color, bg_color, size)
 
-    def draw_button(self, x, y, width, height, color, text="", text_color=WHITE, text_size=2, rotation=0):
+    def draw_button(self, x, y, width, height, color, text="", text_color=WHITE, text_size=1, rotation=0):
         """绘制一个带可选文本的矩形按钮，支持旋转"""
-        # 保存当前旋转设置
-        current_rotation = self.rotation
-        
-        # 设置新的旋转
-        self.rotation = rotation
-        
         # 计算文本宽度和高度
         text_width = len(text) * 8 * text_size
         text_height = 8 * text_size
         
-        # 计算文本位置（基于原始坐标和尺寸）
+        # 绘制按钮背景 165, 200, 40, 150
+        if rotation==1 or rotation==3:
+            h = height
+            height = width
+            width = h
+        
+        self.fillScreen(x, y, color, height, width)
+        
+        if rotation==0 or rotation==2:
+            h = height
+            height = width
+            width = h
+            
+        # 计算文本位置（基于原始坐标和尺寸） 20  100   width 80
         text_x = x + (width - text_width) // 2
         text_y = y + (height - text_height) // 2
-        
-        # 绘制按钮背景
-        self.fillScreen(x, y, color, width, height)
         
         # 如果有文本，居中显示
         if text:
             self.draw_text(text_x, text_y, text, text_color, color, size=text_size, rotation=rotation)
-        
-        # 恢复原来的旋转设置
-        self.rotation = current_rotation
+            
+    def display_image(self, image_data):
+        """显示图像数据"""
+        self.set_window(0, 0, self.width - 1, self.height - 1)  # 设置整个屏幕窗口
+        self.dc.value(1)  # 数据模式
+        self.cs.value(0)  # 启动 SPI 通信
+        self.spi.write(image_data)  # 发送图像数据
+        self.cs.value(1)  # 结束 SPI 通信
