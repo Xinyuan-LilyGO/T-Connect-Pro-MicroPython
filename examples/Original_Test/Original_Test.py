@@ -12,6 +12,7 @@ import wiznet5k_socket  # Importing wiznet5k_socket
 from sx1262 import SX1262
 import gc
 import ustruct
+import photo
 
 # Initialize global variables
 operation_done = False
@@ -21,10 +22,8 @@ Connecting_mac = None
 send_mac = None
 send_data = 0
 receive_data = 0
-receive_can_data = 0
-send_can_data = 0
 error_count = 0
-message_data = 0
+
 # Define connection states
 UNCONNECTED = 0
 CONNECTING = 1
@@ -33,6 +32,9 @@ connection_flag = UNCONNECTED  # Initialize connection flag
 current_connection_flag = 0
 previous_connection_flag = 0
 
+message_data = 0
+receive_can_data = 0
+send_can_data = 0
 RS485_TX_1 = 4
 RS485_RX_1 = 5
 RS485_TX_2 = 17
@@ -44,13 +46,21 @@ temp = 0
 cycle_time = 0
 isConnected1=False
 isConnected2=False
+can_send_state = False
+can_connecting = 0
+
+connection_start_time_232 = None
+connection_start_time_485 = None
+connection_start_time_can = None
 # Callback function definition
 def cb(events):
-    global operation_done, transmit_flag, connection_flag, receive_data, last_receive_time, Connecting_mac
+    global SX1262,sx,error,operation_done, transmit_flag, \
+           connection_flag, receive_data, last_receive_time, \
+           Connecting_mac, msg_str, msg, err, send_mac
+
     if events & SX1262.RX_DONE:  # Check if RX_DONE event occurred
         msg, err = sx.recv()  # Receive the message
         error = SX1262.STATUS.get(err, "Unknown error")
-        
         try:
             msg_str = msg.decode('utf-8')
             if msg_str.startswith("MAC:"): 
@@ -93,13 +103,39 @@ def get_mac_address():
         formatted_mac += hex_str
     return formatted_mac
 
+def sx1262_setup():
+    global sx,transmission_state,transmit_flag,state
+    print("[SX1262] Initializing ... ")
+    if initiating_node:
+        print("[SX1262] Sending first packet with data: {}".format(send_data))
+        transmission_state = sx.send(str(send_data).encode())
+        
+        if isinstance(transmission_state, tuple):
+            if transmission_state[0] == 0:
+                print("[SX1262] Transmission finished!")
+            else:
+                print(f"[SX1262] Failed, code {transmission_state[0]}")
+        else:
+            print("[SX1262] Unexpected TX state format")
+        
+        transmit_flag = True
+    else:
+        print("[SX1262] Starting to listen ... ")
+        state = sx.startReceive()
+        print("RX state: {}".format(SX1262.STATUS.get(state, "Unknown error")))
+
 SCREEN_WIDTH = 480
 SCREEN_HEIGHT = 320
 spi = machine.SPI(1, baudrate=10000000, polarity=0, phase=0, sck=machine.Pin(12), mosi=machine.Pin(11), miso=machine.Pin(13))
 st7796_display = st7796.ST7796(spi=spi, cs=21, dc=41, rst=47, bl=46)
-
 button_pin = machine.Pin(0, machine.Pin.IN, machine.Pin.PULL_UP)
 rotation = 0
+if rotation==0 or rotation==2:
+    SCREEN_WIDTH = 480
+    SCREEN_HEIGHT = 320
+if rotation==1 or rotation==3:
+    SCREEN_WIDTH = 320
+    SCREEN_HEIGHT = 480
 finger_number = 0
 Skip_Current_Test = False
 state = 1
@@ -133,13 +169,34 @@ HTML_Relay1_Flag = False
 last_receive_time1 = time.ticks_ms()
 last_receive_time2 = time.ticks_ms()
 
+def button_rotation():
+    global rotation,SCREEN_WIDTH,SCREEN_HEIGHT
+    if button_pin.value() == 0:
+        rotation = rotation + 1
+        if rotation>3:
+            rotation=0   
+        if rotation==0 or rotation==2:
+            SCREEN_WIDTH = 480
+            SCREEN_HEIGHT = 320
+        if rotation==1 or rotation==3:
+            SCREEN_WIDTH = 320
+            SCREEN_HEIGHT = 480
+        time.sleep(0.5)
+        return True
+    else:
+        return False
+        
+
 def GFX_Print_TEST(text):
     global Skip_Current_Test
     Skip_Current_Test = False
     while True:
         st7796_display.fillScreen(0, 0, st7796_display.WHITE)
         st7796_display.draw_text(int(SCREEN_WIDTH/2) -65, int(SCREEN_HEIGHT/4-15), "TEST", st7796_display.PALERED, st7796_display.WHITE, size=4, rotation=rotation)
-        st7796_display.draw_text(int(SCREEN_WIDTH/4) -100, int(SCREEN_HEIGHT/4*1.5), text, st7796_display.BLACK, st7796_display.WHITE, size=2, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(int(SCREEN_WIDTH/4) -100, int(SCREEN_HEIGHT/4*1.5), text, st7796_display.BLACK, st7796_display.WHITE, size=2, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, int(SCREEN_HEIGHT/4*1.5), text, st7796_display.BLACK, st7796_display.WHITE, size=2, rotation=rotation)
         st7796_display.draw_button(int(SCREEN_WIDTH/2) -78, int(SCREEN_HEIGHT/4*2.6), 40, 150, st7796_display.RED, "Skip Current Test", st7796_display.WHITE, text_size=1, rotation=rotation)
         if skip_button():
             Skip_Current_Test = True
@@ -168,9 +225,14 @@ def GFX_Print_TEST(text):
         break
 
 def GFX_Print_1():
-    st7796_display.draw_button(360, 80, 45, 100, st7796_display.ORANGE, "Try Again", st7796_display.WHITE, rotation=rotation)
-    st7796_display.draw_button(360, 140, 45, 100, st7796_display.PURPLE, "Next Test", st7796_display.WHITE, rotation=rotation)
-
+    global rotation
+    if rotation==0 or rotation==2:
+        st7796_display.draw_button(360, 80, 45, 100, st7796_display.ORANGE, "Try Again", st7796_display.WHITE, rotation=rotation)
+        st7796_display.draw_button(360, 140, 45, 100, st7796_display.PURPLE, "Next Test", st7796_display.WHITE, rotation=rotation)
+    elif rotation==1 or rotation==3:
+        st7796_display.draw_button(55, 350, 45, 100, st7796_display.ORANGE, "Try Again", st7796_display.WHITE, rotation=rotation)
+        st7796_display.draw_button(165, 350, 45, 100, st7796_display.PURPLE, "Next Test", st7796_display.WHITE, rotation=rotation)
+    
 def touch_click():
     global rotated_x,rotated_y
     if touch_sensor.is_touch_detected():
@@ -192,49 +254,88 @@ def touch_click():
 def try_button():
     global rotated_x,rotated_y
     touch_click()
-    if 360<rotated_x<430 and 30<rotated_y<80:
-        rotated_x, rotated_y = (0, 0)
-        return True
-    else:
-        return False
+    if rotation==0 or rotation==2:
+        if 360<rotated_x<430 and 30<rotated_y<80:
+            rotated_x, rotated_y = (0, 0)
+            return True
+        else:
+            return False
+
+    elif rotation==1 or rotation==3:
+        if 5<rotated_x<70 and 350<rotated_y<400:
+            rotated_x, rotated_y = (0, 0)
+            return True
+        else:
+            return False
     
 def next_button():
     global rotated_x,rotated_y
     touch_click()
-    if 360<rotated_x<430 and 100<rotated_y<150:
-        rotated_x, rotated_y = (0, 0)
-        return True
-    else:
-        return False
+    if rotation==0 or rotation==2:
+        if 360<rotated_x<430 and 100<rotated_y<150:
+            rotated_x, rotated_y = (0, 0)
+            return True
+        else:
+            return False
+        
+    elif rotation==1 or rotation==3:
+        if 120<rotated_x<200 and 350<rotated_y<400:
+            rotated_x, rotated_y = (0, 0)
+            return True
+        else:
+            return False
 
 def new_button():
     global rotated_x,rotated_y
     touch_click()
-    if 360<rotated_x<430 and 155<rotated_y<220:
-        rotated_x, rotated_y = (0, 0)
-        return True
-    else:
-        return False
+    if rotation==0 or rotation==2:
+        if 360<rotated_x<430 and 155<rotated_y<220:
+            rotated_x, rotated_y = (0, 0)
+            return True
+        else:
+            return False
+    elif rotation==1 or rotation==3:   
+        if 70<rotated_x<200 and 400<rotated_y<500:
+            rotated_x, rotated_y = (0, 0)
+            return True
+        else:
+            return False
+
     
 def skip_button():
     global rotated_x,rotated_y
     touch_click()
-    if 150<rotated_x<280 and 140<rotated_y<230:
-        rotated_x, rotated_y = (0, 0)
-        return True
-    else:
-        return False
+    if rotation==0 or rotation==2:
+        if 150<rotated_x<280 and 140<rotated_y<230:
+            rotated_x, rotated_y = (0, 0)
+            return True
+        else:
+            return False
+    elif rotation==1 or rotation==3:
+        if 10<rotated_x<150 and 250<rotated_y<400:
+            rotated_x, rotated_y = (0, 0)
+            return True
+        else:
+            return False
     
 def Original_Test_1():
-    st7796_display.fillScreen(0, 0, st7796_display.WHITE)
-    st7796_display.draw_text(20, 80, "Touch Info", st7796_display.PALERED, st7796_display.WHITE, size=2, rotation=rotation)
-    GFX_Print_1()
-    st7796_display.draw_text(20, 110, "The Home button is triggered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-
-def GFX_Print_Touch_Info_Loop():
-    global rotated_x1,rotated_x2,rotated_x3,rotated_x4,rotated_x5,rotated_y1,rotated_y2,rotated_y3,rotated_y4,rotated_y5,finger_number,state
-    st7796_display.draw_text(20, 100, f"ID: {touch_sensor.device_id:#X}", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+    if rotation==0 or rotation==2:
+        st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+        st7796_display.draw_text(20, 80, "Touch Info", st7796_display.PALERED, st7796_display.WHITE, size=2, rotation=rotation)
+        GFX_Print_1()
+        st7796_display.draw_text(20, 110, "The Home button is triggered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+    elif rotation==1 or rotation==3:
+        st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+        st7796_display.draw_text(50, 50, "Touch Info", st7796_display.PALERED, st7796_display.WHITE, size=2, rotation=rotation)
+        GFX_Print_1()
+        st7796_display.draw_text(50, 80, "The Home button is triggered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     
+def GFX_Print_Touch_Info_Loop():
+    global rotated_x1,rotated_x2,rotated_x3,rotated_x4,rotated_x5,rotated_y1,rotated_y2,rotated_y3,rotated_y4,rotated_y5,finger_number,state,rotation
+    if rotation==0 or rotation==2:
+        st7796_display.draw_text(20, 100, f"ID: {touch_sensor.device_id:#X}", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+    elif rotation==1 or rotation==3:
+        st7796_display.draw_text(50, 70, f"ID: {touch_sensor.device_id:#X}", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     if touch_sensor.is_touch_detected():
         touch_interrupt_flag = False
         touch_sensor.clear_touch_interrupt_flag()
@@ -291,38 +392,79 @@ def GFX_Print_Touch_Info_Loop():
                 rotated_x5, rotated_y5 = 480 - y5, x5
             elif rotation == 3:    # 3
                 rotated_x5, rotated_y5 = 222 - x5, 480 - y5
-        if rotated_x1>480 or rotated_x1<0 or rotated_y1>240 or rotated_y1<0:
-            st7796_display.draw_text(20, 110, "The Home button is triggered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            state = 1
-        else:
-            state = 0
-            st7796_display.draw_text(20, 110, f"Fingers Number: {finger_number}            ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(20, 120, f"Touch X{1}:{rotated_x1}   Y{1}:{rotated_y1}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(20, 130, f"Touch X{2}:{rotated_x2}   Y{2}:{rotated_y2}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(20, 140, f"Touch X{3}:{rotated_x3}   Y{3}:{rotated_y3}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(20, 150, f"Touch X{4}:{rotated_x4}   Y{4}:{rotated_y4}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(20, 160, f"Touch X{5}:{rotated_x5}   Y{5}:{rotated_y5}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                
+        if rotation==0 or rotation==2: 
+            if rotated_x1>480 or rotated_x1<0 or rotated_y1>240 or rotated_y1<0 \
+               or rotated_x2>480 or rotated_x2<0 or rotated_y2>240 or rotated_y2<0 \
+               or rotated_x3>480 or rotated_x3<0 or rotated_y3>240 or rotated_y3<0 \
+               or rotated_x4>480 or rotated_x4<0 or rotated_y4>240 or rotated_y4<0 \
+               or rotated_x5>480 or rotated_x5<0 or rotated_y5>240 or rotated_y5<0 :
+                st7796_display.draw_text(20, 110, "The Home button is triggered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                state = 1
+            else:
+                state = 0
+                st7796_display.draw_text(20, 110, f"Fingers Number: {finger_number}            ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(20, 120, f"Touch X{1}:{rotated_x1}   Y{1}:{rotated_y1}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(20, 130, f"Touch X{2}:{rotated_x2}   Y{2}:{rotated_y2}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(20, 140, f"Touch X{3}:{rotated_x3}   Y{3}:{rotated_y3}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(20, 150, f"Touch X{4}:{rotated_x4}   Y{4}:{rotated_y4}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(20, 160, f"Touch X{5}:{rotated_x5}   Y{5}:{rotated_y5}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3: 
+            if rotated_x1>240 or rotated_x1<0 or rotated_y1>480 or rotated_y1<0 \
+               or rotated_x2>240 or rotated_x2<0 or rotated_y2>480 or rotated_y2<0 \
+               or rotated_x3>240 or rotated_x3<0 or rotated_y3>480 or rotated_y3<0 \
+               or rotated_x4>240 or rotated_x4<0 or rotated_y4>480 or rotated_y4<0 \
+               or rotated_x5>240 or rotated_x5<0 or rotated_y5>480 or rotated_y5<0:
+                st7796_display.draw_text(50, 80, "The Home button is triggered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                state = 1
+            else:
+                state = 0
+                st7796_display.draw_text(50, 80, f"Fingers Number: {finger_number}            ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(50, 90, f"Touch X{1}:{rotated_x1}   Y{1}:{rotated_y1}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(50, 100, f"Touch X{2}:{rotated_x2}   Y{2}:{rotated_y2}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(50, 110, f"Touch X{3}:{rotated_x3}   Y{3}:{rotated_y3}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(50, 120, f"Touch X{4}:{rotated_x4}   Y{4}:{rotated_y4}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(50, 130, f"Touch X{5}:{rotated_x5}   Y{5}:{rotated_y5}  ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     if state:
-        st7796_display.draw_text(20, 110, "The Home button is triggered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 120, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 130, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 140, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 150, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 160, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-        rotated_x1, rotated_y1 = (0, 0)
-        rotated_x2, rotated_y2 = (0, 0)
-        rotated_x3, rotated_y3 = (0, 0)
-        rotated_x4, rotated_y4 = (0, 0)
-        rotated_x5, rotated_y5 = (0, 0)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(20, 110, "The Home button is triggered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 120, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 130, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 140, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 150, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 160, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            rotated_x1, rotated_y1 = (0, 0)
+            rotated_x2, rotated_y2 = (0, 0)
+            rotated_x3, rotated_y3 = (0, 0)
+            rotated_x4, rotated_y4 = (0, 0)
+            rotated_x5, rotated_y5 = (0, 0)
+        elif rotation==1 or rotation==3:      
+            st7796_display.draw_text(50, 80, "The Home button is triggered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 90, "                         ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 100, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 110, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 120, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 130, "                        ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            rotated_x1, rotated_y1 = (0, 0)
+            rotated_x2, rotated_y2 = (0, 0)
+            rotated_x3, rotated_y3 = (0, 0)
+            rotated_x4, rotated_y4 = (0, 0)
+            rotated_x5, rotated_y5 = (0, 0)
     else:
         finger_number, touches, pressures = touch_sensor.read_touch_data()
-        st7796_display.draw_text(20, 110, f"Fingers Number: {finger_number}            ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(20, 110, f"Fingers Number: {finger_number}            ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 80, f"Fingers Number: {finger_number}            ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
 
 
 def Original_Test_2():
     st7796_display.fillScreen(0, 0, st7796_display.WHITE)
-    st7796_display.draw_text(150, 140, "START", st7796_display.RED, st7796_display.WHITE, size=4, rotation=rotation)
-    st7796_display.backlight = machine.PWM(st7796_display.backlight)
+    if rotation==0 or rotation==2:
+        st7796_display.draw_text(150, 140, "START", st7796_display.RED, st7796_display.WHITE, size=4, rotation=rotation)
+    elif rotation==1 or rotation==3:
+        st7796_display.draw_text(75, 140, "START", st7796_display.RED, st7796_display.WHITE, size=4, rotation=rotation)
+    
     for duty in range(1023, -1, -100): 
         st7796_display.backlight.freq(1000)
         st7796_display.backlight.duty(duty)
@@ -331,8 +473,11 @@ def Original_Test_2():
     for duty in range(0, 1024, 100): 
         st7796_display.backlight.freq(1000)
         st7796_display.backlight.duty(duty)
-        time.sleep(0.1)  
-    st7796_display.draw_text(150, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
+        time.sleep(0.1)
+    if rotation==0 or rotation==2:
+        st7796_display.draw_text(150, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
+    elif rotation==1 or rotation==3:
+        st7796_display.draw_text(70, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
     GFX_Print_1()
 
 def Original_Test_3():
@@ -345,7 +490,10 @@ def Original_Test_3():
     st7796_display.fillScreen(0, 0, st7796_display.WHITE)
     time.sleep(3)
     st7796_display.fillScreen(0, 0, st7796_display.BLACK)
-    st7796_display.draw_text(150, 140, "FINISH", st7796_display.ORANGE, st7796_display.BLACK, size=4, rotation=rotation)
+    if rotation==0 or rotation==2:
+        st7796_display.draw_text(150, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
+    elif rotation==1 or rotation==3:
+        st7796_display.draw_text(70, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
     GFX_Print_1()
 
 def Original_Test_4():
@@ -357,26 +505,40 @@ def Original_Test_4():
     time.sleep(1)
 
     print("\nScanning wifi")
-    st7796_display.draw_text(0, 50, "Scanning wifi", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+    if rotation==0 or rotation==2:
+        st7796_display.draw_text(0, 50, "Scanning wifi", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+    elif rotation==1 or rotation==3:
+        st7796_display.draw_text(50, 50, "Scanning wifi", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     wifi_list = wlan.scan()
     wifi_num = len(wifi_list)
 
     if wifi_num == 0:
         text = "\nWiFi scan complete!\nNo WiFi discovered\n"
-        st7796_display.draw_text(0, 66, "WiFi scan complete", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(0, 74, "No WiFi discovered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(0, 66, "WiFi scan complete", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(0, 74, "No WiFi discovered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:        
+            st7796_display.draw_text(50, 66, "WiFi scan complete", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 74, "No WiFi discovered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     else:
         text = "\nWiFi scan complete!\n"
         text += f"{wifi_num} WiFi networks discovered:\n\n"
         y_position = 90
-        st7796_display.draw_text(0, 66, "WiFi scan complete", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(0, 74, f"{wifi_num} WiFi networks discovered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(0, 66, "WiFi scan complete", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(0, 74, f"{wifi_num} WiFi networks discovered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 66, "WiFi scan complete", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 74, f"{wifi_num} WiFi networks discovered", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
         for i in range(wifi_num):
             ssid = wifi_list[i][0].decode('utf-8')  # SSID
             rssi = wifi_list[i][3]  # RSSI
             encryption = "*" if wifi_list[i][4] != 0 else ""
             text += f"{i + 1}: {ssid} ({rssi}) {encryption}\n"
-            st7796_display.draw_text(0, y_position, f"{i + 1}: {ssid} ({rssi}) {encryption}", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            if rotation==0 or rotation==2:
+                st7796_display.draw_text(0, y_position, f"{i + 1}: {ssid} ({rssi}) {encryption}", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            elif rotation==1 or rotation==3:
+                st7796_display.draw_text(50, y_position, f"{i + 1}: {ssid} ({rssi}) {encryption}", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
             y_position += 8
             time.sleep(0.01)
     print(text)
@@ -385,12 +547,17 @@ def Original_Test_4():
     # Clear the console for the next phase
     print("\nConnecting to")
     st7796_display.fillScreen(0, 0, st7796_display.WHITE)
-    st7796_display.draw_text(0, 50, "Connecting to", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+    if rotation==0 or rotation==2:
+        st7796_display.draw_text(0, 50, "Connecting to", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+    elif rotation==1 or rotation==3:    
+        st7796_display.draw_text(50, 50, "Connecting to", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     WIFI_SSID = "xinyuandianzi"      # Replace with your SSID
     WIFI_PASSWORD = "AA15994823428"  # Replace with your password
     print(WIFI_SSID)
-    st7796_display.draw_text(0, 58, WIFI_SSID, st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-
+    if rotation==0 or rotation==2:
+        st7796_display.draw_text(0, 58, WIFI_SSID, st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+    elif rotation==1 or rotation==3:
+        st7796_display.draw_text(50, 58, WIFI_SSID, st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     # Start connecting to the Wi-Fi
     wlan.connect(str(WIFI_SSID), str(WIFI_PASSWORD))
 
@@ -399,10 +566,13 @@ def Original_Test_4():
     last_tick = time.ticks_ms()
 
     Wifi_Connection_Flag = False
-    x_pos = 0
+    x_pos = 50
     while not wlan.isconnected():
         sys.stdout.write(".")
-        st7796_display.draw_text(x_pos, 66, ".", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(x_pos, 66, ".", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(x_pos, 66, ".", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
         x_pos += 8
         time.sleep(0.1)
         if time.ticks_ms() - last_tick > WIFI_CONNECT_WAIT_MAX:
@@ -413,16 +583,26 @@ def Original_Test_4():
 
     if Wifi_Connection_Flag:
         print("\nThe connection was successful!")
-        st7796_display.draw_text(0, 72, "The connection was successful", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(0, 72, "The connection was successful    ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 72, "The connection was successful    ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
         print("Takes", time.ticks_ms() - last_tick, "ms")
         print("\nWiFi test passed!")
-        st7796_display.draw_text(0, 88, "WiFi test passed", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(0, 88, "WiFi test passed", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 88, "WiFi test passed", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     else:
         print("\nWiFi test error!")
-        st7796_display.draw_text(0, 88, "WiFi test error", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(0, 88, "WiFi test error", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 88, "WiFi test error", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     time.sleep(2)
     
 def WIFI_HTTP_Download_File():
+    global speed, remaining_size, file_size, total_time, average_speed,downloaded_size
     st7796_display.fillScreen(0, 0, st7796_display.WHITE)
     
     fileDownloadUrl = "https://freetyst.nf.migu.cn/public/product9th/product45/2022/05/0716/2018%E5%B9%B409%E6%9C%8812%E6%97%A510%E7%82%B943%E5%88%86%E7%B4%A7%E6%80%A5%E5%86%85%E5%AE%B9%E5%87%86%E5%85%A5%E5%8D%8E%E7%BA%B3179%E9%A6%96/%E6%A0%87%E6%B8%85%E9%AB%98%E6%B8%85/MP3_128_16_Stero/6005751EPFG164228.mp3?channelid=02&msisdn=d43a7dcc-8498-461b-ba22-3205e9b6aa82&Tim=1728484238063&Key=0442fa065dacda7c"
@@ -448,9 +628,14 @@ def WIFI_HTTP_Download_File():
                 print("File size is unknown. Proceeding with download...")
             else:
                 print("Starting file download...")
-                st7796_display.draw_text(0, 50, "Starting file download...", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-                print(f"File size: {file_size / 1024 / 1024:.2f} MB")
-                st7796_display.draw_text(0, 58, f"File size: {file_size / 1024 / 1024:.2f} MB      ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                if rotation==0 or rotation==2:
+                    st7796_display.draw_text(0, 50, "Starting file download...", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    print(f"File size: {file_size / 1024 / 1024:.2f} MB")
+                    st7796_display.draw_text(0, 58, f"File size: {file_size / 1024 / 1024:.2f} MB      ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                elif rotation==1 or rotation==3:
+                    st7796_display.draw_text(50, 50, "Starting file download...", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    print(f"File size: {file_size / 1024 / 1024:.2f} MB")
+                    st7796_display.draw_text(50, 58, f"File size: {file_size / 1024 / 1024:.2f} MB      ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
 
             # Start reading the response content
             while True:
@@ -466,10 +651,16 @@ def WIFI_HTTP_Download_File():
                     speed = (downloaded_size / 1024) / ((current_time - last_report_time) / 1000)  # KB/s
                     remaining_size = file_size - downloaded_size if file_size != -1 else -1
                     print(f"Download speed: {speed:.2f} KB/s")
-                    st7796_display.draw_text(0, 74, f"Speed: {speed:.2f} KB/s       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    if rotation==0 or rotation==2:
+                        st7796_display.draw_text(0, 74, f"Speed: {speed:.2f} KB/s       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    elif rotation==1 or rotation==3:
+                        st7796_display.draw_text(50, 74, f"Speed: {speed:.2f} KB/s       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
                     if remaining_size != -1:
                         print(f"Remaining file size: {remaining_size / 1024 / 1024:.2f} MB")
-                        st7796_display.draw_text(0, 82, f"Size: {remaining_size / 1024 / 1024:.2f} MB       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                        if rotation==0 or rotation==2:
+                            st7796_display.draw_text(0, 82, f"Size: {remaining_size / 1024 / 1024:.2f} MB       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                        elif rotation==1 or rotation==3:
+                            st7796_display.draw_text(50, 82, f"Size: {remaining_size / 1024 / 1024:.2f} MB       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
                     last_report_time = current_time
 
             response.close()  # Close HTTP connection
@@ -477,13 +668,22 @@ def WIFI_HTTP_Download_File():
             end_time = time.ticks_ms()
             total_time = (end_time - start_time - useless_time) / 1000
             print("Download completed!")
-            st7796_display.draw_text(0, 98, "Completed", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            print(f"Total download time: {total_time:.2f} s")
-            st7796_display.draw_text(0, 106, f"Time: {total_time:.2f} s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            average_speed = (downloaded_size / 1024) / total_time if total_time > 0 else 0
-            print(f"Average download speed: {average_speed:.2f} KB/s")
-            st7796_display.draw_text(0, 114, f"Speed: {average_speed:.2f} KB/s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(150, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
+            if rotation==0 or rotation==2:
+                st7796_display.draw_text(0, 98, "Completed", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                print(f"Total download time: {total_time:.2f} s")
+                st7796_display.draw_text(0, 106, f"Time: {total_time:.2f} s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                average_speed = (downloaded_size / 1024) / total_time if total_time > 0 else 0
+                print(f"Average download speed: {average_speed:.2f} KB/s")
+                st7796_display.draw_text(0, 114, f"Speed: {average_speed:.2f} KB/s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(150, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
+            elif rotation==1 or rotation==3:
+                st7796_display.draw_text(50, 98, "Completed", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                print(f"Total download time: {total_time:.2f} s")
+                st7796_display.draw_text(50, 106, f"Time: {total_time:.2f} s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                average_speed = (downloaded_size / 1024) / total_time if total_time > 0 else 0
+                print(f"Average download speed: {average_speed:.2f} KB/s")
+                st7796_display.draw_text(50, 114, f"Speed: {average_speed:.2f} KB/s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(70, 180, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
             GFX_Print_1()
         else:
             print("Failed to download")
@@ -498,18 +698,28 @@ def WIFI_HTTP_Download_File():
 def Original_Test_5():
     GFX_Print_RS485_Info()
     GFX_Print_1()
-    st7796_display.draw_button(360, 200, 45, 100, st7796_display.PALERED, "Reconnect", st7796_display.WHITE, rotation=rotation)
-
+    if rotation==0 or rotation==2:
+        st7796_display.draw_button(360, 200, 45, 100, st7796_display.PALERED, "Reconnect", st7796_display.WHITE, rotation=rotation)
+    elif rotation==1 or rotation==3:
+        st7796_display.draw_button(110, 400, 45, 100, st7796_display.PALERED, "Reconnect", st7796_display.WHITE, rotation=rotation)
+can_count = 0
 # Send CAN message
 def send_message():
-    global counter,send_can_data
+    global counter,send_can_data,can_count,can_send_state
     msg_id = 0xF1
     msg_data = [1, 2, 3, 4, 5, 6, 7, 8]
     try:
-        success = dev.send(msg_data, msg_id)
+        if can_send_state:
+            can_count += 1
+            if can_count>2 and can_connecting ==1 :
+                can_count = 0
+                can_send_state = False
+                return
+            success = dev.send(msg_data, msg_id)
+            time.sleep(0.5)
+            
     except Exception as e:
         print(f"Error sending message: {e}")
-        success = False
     if isConnect:
         print("Message queued for transmission")
         send_can_data += 1
@@ -581,9 +791,6 @@ def rs_receive_message():
         if time.ticks_diff(current_time, last_receive_time2) > 3000:
             isConnected2 = False 
     
-    print(isConnected1)
-    print(isConnected2)
-    
 def safe_decode(data):
     try:
         return data.decode('utf-8')
@@ -596,15 +803,19 @@ def GFX_Print_RS485CAN_Info_Loop():
 
 def GFX_Print_485_CAN_Info_Loop():
     global isConnect, receive_can_data, send_can_data, can_isConnect
-    global isConnected1, isConnected2, is_232Connect, is_485Connect
-    global connection_start_time_232, connection_start_time_485, connection_start_time_can
+    global isConnected1, isConnected2, is_232Connect, is_485Connect, can_connecting, can_count
+    global connection_start_time_232, connection_start_time_485, connection_start_time_can, can_send_state
 
     can_current_time = time.time()
 
     # 232 Connection Check
     if isConnected1 is True:
-        st7796_display.draw_text(55, 131, f"[Connect]: Connected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(55, 139, f"[Receive Data]: {receive_can_data}         ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(55, 131, f"[Connect]: Connected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(55, 139, f"[Receive Data]: {receive_can_data}         ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 131, f"[Connect]: Connected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 139, f"[Receive Data]: {receive_can_data}         ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
         can_isConnect = 1
         connection_start_time_232 = None  # Reset the timer when connected
     elif isConnected1 is not True:
@@ -613,16 +824,27 @@ def GFX_Print_485_CAN_Info_Loop():
                 connection_start_time_232 = can_current_time  # Start the timer
             if (can_current_time - connection_start_time_232) >= 3:
                 is_232Connect = 1  # Set to 1 if more than 3 seconds
-            st7796_display.draw_text(55, 131, f"[Connect]: Connecting       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(55, 139, f"[Send Data]: {send_can_data}          ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            if rotation==0 or rotation==2:
+                st7796_display.draw_text(55, 131, f"[Connect]: Connecting       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(55, 139, f"[Send Data]: {send_can_data}          ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            elif rotation==1 or rotation==3:
+                st7796_display.draw_text(50, 131, f"[Connect]: Connecting       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(50, 139, f"[Send Data]: {send_can_data}          ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
         else:
-            st7796_display.draw_text(55, 131, f"[Connect]: Unconnected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(55, 139, f"                                 ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-
+            if rotation==0 or rotation==2:
+                st7796_display.draw_text(55, 131, f"[Connect]: Unconnected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(55, 139, f"                                 ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            elif rotation==1 or rotation==3:
+                st7796_display.draw_text(50, 131, f"[Connect]: Unconnected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(50, 139, f"                                 ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     # 485 Connection Check
     if isConnected2 is True:
-        st7796_display.draw_text(55, 168, f"[Connect]: Connected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(55, 176, f"[Receive Data]: {receive_can_data}         ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(55, 168, f"[Connect]: Connected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(55, 176, f"[Receive Data]: {receive_can_data}         ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 168, f"[Connect]: Connected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 176, f"[Receive Data]: {receive_can_data}         ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
         can_isConnect = 1
         connection_start_time_485 = None  # Reset the timer when connected
     elif isConnected2 is not True:
@@ -631,50 +853,92 @@ def GFX_Print_485_CAN_Info_Loop():
                 connection_start_time_485 = can_current_time  # Start the timer
             if (can_current_time - connection_start_time_485) >= 3:
                 is_485Connect = 1  # Set to 1 if more than 3 seconds
-            st7796_display.draw_text(55, 168, f"[Connect]: Connecting       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(55, 176, f"[Send Data]: {send_can_data}          ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            if rotation==0 or rotation==2:
+                st7796_display.draw_text(55, 168, f"[Connect]: Connecting       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(55, 176, f"[Send Data]: {send_can_data}          ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            if rotation==1 or rotation==3:
+                st7796_display.draw_text(50, 168, f"[Connect]: Connecting       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(50, 176, f"[Send Data]: {send_can_data}          ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
         else:
-            st7796_display.draw_text(55, 168, f"[Connect]: Unconnected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(55, 176, f"                                 ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-
+            if rotation==0 or rotation==2:
+                st7796_display.draw_text(55, 168, f"[Connect]: Unconnected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(55, 176, f"                                 ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            elif rotation==1 or rotation==3:
+                st7796_display.draw_text(50, 168, f"[Connect]: Unconnected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(50, 176, f"                                 ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     # CAN Connection Check
     if isConnect is True:
-        st7796_display.draw_text(55, 216, f"[Connect]: Connected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(55, 224, f"[Receive Data]: {receive_can_data}         ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        can_send_state = True
+        can_connecting = 0
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(55, 216, f"[Connect]: Connected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(55, 224, f"[Receive Data]: {receive_can_data}         ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 216, f"[Connect]: Connected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 224, f"[Receive Data]: {receive_can_data}         ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
         can_isConnect = 1
         connection_start_time_can = None  # Reset the timer when connected
     elif isConnect is not True:
         if can_isConnect == 0:
+            can_send_state = True
+            can_connecting = 1
+            can_count = 0
             if connection_start_time_can is None:
                 connection_start_time_can = can_current_time  # Start the timer
             if (can_current_time - connection_start_time_can) >= 3:
                 can_isConnect = 1  # Set to 1 if more than 3 seconds
-            st7796_display.draw_text(55, 216, f"[Connect]: Connecting       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(55, 224, f"[Send Data]: {send_can_data}          ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                
+            if rotation==0 or rotation==2:
+                st7796_display.draw_text(55, 216, f"[Connect]: Connecting       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(55, 224, f"[Send Data]: {send_can_data}          ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            elif rotation==1 or rotation==3:
+                st7796_display.draw_text(50, 216, f"[Connect]: Connecting       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(50, 224, f"[Send Data]: {send_can_data}          ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
         else:
-            st7796_display.draw_text(55, 216, f"[Connect]: Unconnected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-            st7796_display.draw_text(55, 224, f"                                 ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-    
-def GFX_Print_RS485_Info():
-    st7796_display.fillScreen(0, 0, st7796_display.WHITE)
-    st7796_display.draw_text(30, 65, "RS485232CAN Info", st7796_display.PURPLE, st7796_display.WHITE, size=2, rotation=rotation)
-    st7796_display.draw_text(40, 90, "[RS485232]:115200 bps/s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-    st7796_display.draw_text(40, 98, "[CAN]:1 mbit/s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-    
-    st7796_display.draw_text(40, 115, "<----------UART Info---------->", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-    st7796_display.draw_text(40, 123, "[RS232]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-    st7796_display.draw_text(40, 160, "[RS485]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-    
-    st7796_display.draw_text(40, 200, "<----------CAN Info---------->", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
-    st7796_display.draw_text(40, 208, "[CAN]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            can_send_state = False
+            can_connecting = 0
+            if rotation==0 or rotation==2:
+                st7796_display.draw_text(55, 216, f"[Connect]: Unconnected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(55, 224, f"                                 ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            elif rotation==1 or rotation==3:
+                st7796_display.draw_text(50, 216, f"[Connect]: Unconnected       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                st7796_display.draw_text(50, 224, f"                                 ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
 
-def GFX_Print_RS485_Info_Loop():
-    pass
+def GFX_Print_RS485_Info():
+    if rotation==0 or rotation==2:
+        st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+        st7796_display.draw_text(30, 65, "RS485232CAN Info", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+        st7796_display.draw_text(40, 90, "[RS485232]:115200 bps/s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        st7796_display.draw_text(40, 98, "[CAN]:1 mbit/s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        
+        st7796_display.draw_text(40, 115, "<----------UART Info---------->", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        st7796_display.draw_text(40, 123, "[RS232]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        st7796_display.draw_text(40, 160, "[RS485]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        
+        st7796_display.draw_text(40, 200, "<----------CAN Info---------->", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        st7796_display.draw_text(40, 208, "[CAN]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+
+    elif rotation==1 or rotation==3:
+        st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+        st7796_display.draw_text(50, 65, "RS485232CAN Info", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+        st7796_display.draw_text(50, 90, "[RS485232]:115200 bps/s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        st7796_display.draw_text(50, 98, "[CAN]:1 mbit/s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        
+        st7796_display.draw_text(50, 115, "<----------UART Info---------->", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        st7796_display.draw_text(50, 123, "[RS232]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        st7796_display.draw_text(50, 160, "[RS485]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        
+        st7796_display.draw_text(50, 200, "<----------CAN Info---------->", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        st7796_display.draw_text(50, 208, "[CAN]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+
 
 def Original_Test_6():
     GFX_Print_Ethernet_Info()
     GFX_Print_1()
-    st7796_display.draw_button(360, 200, 45, 100, st7796_display.PALERED, "Relay Test", st7796_display.WHITE, rotation=rotation)
+    if rotation==0 or rotation==2:
+        st7796_display.draw_button(360, 200, 45, 100, st7796_display.PALERED, "Relay Test", st7796_display.WHITE, rotation=rotation)
+    elif rotation==1 or rotation==3:
+        st7796_display.draw_button(110, 400, 45, 100, st7796_display.PALERED, "Relay Test", st7796_display.WHITE, rotation=rotation)
     GFX_Print_Ethernet_Info_Loop()
     
 def ethernet_reset():
@@ -703,12 +967,19 @@ def print_hardware_status():
 def cable_link_status():
     global HTML_Relay1_Flag,eth_relay_info
     link_status = net.link_status
+    if button_rotation():
+        st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+        Original_Test_6()
     if link_status == 0:
         print("Link status: Unknown")
     elif link_status == 1:
         print("Link status: ON")
-        st7796_display.draw_text(20, 88, "[State]:", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(36, 96, "Initialization successful", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(20, 88, "[State]:", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(36, 96, "Initialization successful", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 88, "[State]:", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(66, 96, "Initialization successful", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
         network_init() # network init
         static_ip_str = '.'.join(map(str, STATIC_IP))
         addr = wiznet5k_socket.getaddrinfo(static_ip_str, 80)[0][-1]  # Using wiznet5k_socket for address info
@@ -719,6 +990,9 @@ def cable_link_status():
         print("Server started at http://%s\n" % net.pretty_ip(net.ip_address))
         while True:
             try:
+                if button_rotation():
+                    st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+                    Original_Test_6()
                 if new_button():
                     HTML_Relay1_Flag = not HTML_Relay1_Flag
                     relay.value(0 if HTML_Relay1_Flag else 1)
@@ -773,12 +1047,20 @@ def cable_link_status():
         print("Link status: OFF")
         print("The network cable is not connected !")
         print("Please insert the network cable and try again !");
-        st7796_display.draw_text(20, 88, "[State]:", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(36, 96, "Initialization failed    ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 104, "[Assertion]:                 ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 114, "  Please insert the network cable   ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 124, "                                  ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 134, "                                  ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(20, 88, "[State]:", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(36, 96, "Initialization failed    ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 104, "[Assertion]:                 ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 114, "  Please insert the network cable   ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 124, "                                  ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 134, "                                  ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 88, "[State]:", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(58, 96, "Initialization failed    ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 104, "[Assertion]:                 ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 114, "Please insert the network cable   ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 124, "                                  ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 134, "                                  ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
 
 def network_init():
     global dhcp_client
@@ -795,11 +1077,16 @@ def network_init():
         print("[DHCP] Gateway: ", net.pretty_ip(gateway))
         print("[DHCP] DNS: ", net.pretty_ip(dns))
         print("-------------------------\n")
-
-        st7796_display.draw_text(20, 104, f"[IP address]: {net.pretty_ip(net.ip_address)}", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 114, f"[Subnet mask]: {net.pretty_ip(subnet_mask)}       ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 124, f"[Gateway]: {net.pretty_ip(gateway)}", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
-        st7796_display.draw_text(20, 134, f"[DNS]: {net.pretty_ip(dns)}", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(20, 104, f"[IP address]: {net.pretty_ip(net.ip_address)}", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 114, f"[Subnet mask]: {net.pretty_ip(subnet_mask)}       ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 124, f"[Gateway]: {net.pretty_ip(gateway)}", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(20, 134, f"[DNS]: {net.pretty_ip(dns)}", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 104, f"[IP address]: {net.pretty_ip(net.ip_address)}", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 114, f"[Subnet mask]: {net.pretty_ip(subnet_mask)}       ", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 124, f"[Gateway]: {net.pretty_ip(gateway)}", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(50, 134, f"[DNS]: {net.pretty_ip(dns)}", st7796_display.PURPLE, st7796_display.WHITE, size=1, rotation=rotation)
     else:
         print("-------------------------")
         print("[INFO] Configuring random DHCP failed !")
@@ -812,55 +1099,41 @@ def network_init():
         print("-------------------------\n")
  
 def GFX_Print_Ethernet_Info():
-    st7796_display.fillScreen(0, 0, st7796_display.WHITE)
-    st7796_display.draw_text(30, 65, "Eth Relay Info", st7796_display.PURPLE, st7796_display.WHITE, size=2, rotation=rotation)
-
+    if rotation==0 or rotation==2:
+        st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+        st7796_display.draw_text(30, 65, "Eth Relay Info", st7796_display.PURPLE, st7796_display.WHITE, size=2, rotation=rotation)
+    elif rotation==1 or rotation==3:
+        st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+        st7796_display.draw_text(50, 65, "Eth Relay Info", st7796_display.PURPLE, st7796_display.WHITE, size=2, rotation=rotation)
+        
 def GFX_Print_Ethernet_Info_Loop():
     print_hardware_status()
 
 def Original_Test_8():
-    global initiating_node,transmission_state,transmit_flag,state,previous_connection_flag,last_receive_time,local_mac,sx,freq,bw,power
+    global local_mac,sx,freq,bw,power,initiating_node
+    st7796_display.fillScreen(0, 0, st7796_display.WHITE)
     local_mac = get_mac_address()
-    # Initialize SX1262 instance with ESP32S3 pin configuration
     sx = SX1262(spi_bus=1, clk=12, mosi=11, miso=13, cs=14, irq=45, rst=42, gpio=38)
     freq = 868.6
     bw = 125.0
     power = 22
     # LoRa mode configuration
-    sx.begin(freq=freq, bw=bw, sf=12, cr=8, syncWord=0x12,
-             power=power, currentLimit=60.0, preambleLength=8,
+    sx.begin(freq=923, bw=500.0, sf=12, cr=8, syncWord=0x12,
+             power=-5, currentLimit=60.0, preambleLength=8,
              implicit=False, implicitLen=0xFF,
-             crcOn=True)
-
+             crcOn=True, txIq=False, rxIq=False,
+             tcxoVoltage=1.7, useRegulatorLDO=False, blocking=True)
     # Set the callback function
+    time.sleep(1)
     sx.setBlockingCallback(False, cb)
-
     initiating_node = True  # Set True for the initiating node, False for the responding node
-    st7796_display.fillScreen(0, 0, st7796_display.WHITE)
-    
-    print("[SX1262] Initializing ... ")
-    if initiating_node:
-        print("[SX1262] Sending first packet with data: {}".format(send_data))
-        transmission_state = sx.send(str(send_data).encode())
-        
-        if isinstance(transmission_state, tuple):
-            if transmission_state[0] == 0:
-                print("[SX1262] Transmission finished!")
-            else:
-                print(f"[SX1262] Failed, code {transmission_state[0]}")
-        else:
-            print("[SX1262] Unexpected TX state format")
-        
-        transmit_flag = True
-    else:
-        print("[SX1262] Starting to listen ... ")
-        state = sx.startReceive()
-        print("RX state: {}".format(SX1262.STATUS.get(state, "Unknown error")))
-#     previous_connection_flag = None
-    last_receive_time = time.ticks_ms()
+    sx1262_setup()
     
 def Original_Test_8_Loop():
-    global operation_done, transmit_flag, connection_flag, receive_data, last_receive_time, Connecting_mac, send_data, current_connection_flag, previous_connection_flag,error_count
+    global sx, operation_done, transmit_flag, connection_flag, \
+           receive_data, last_receive_time, Connecting_mac, \
+           send_data, current_connection_flag, previous_connection_flag, \
+           error_count, transmission_state
 
     if operation_done:
         operation_done = False
@@ -877,80 +1150,157 @@ def Original_Test_8_Loop():
             
     if connection_flag == UNCONNECTED or connection_flag == CONNECTING:
         current_connection_flag = 0
-        st7796_display.draw_text(0, 50, "SX1262 Info", st7796_display.PURPLE, st7796_display.WHITE, size=2, rotation=0)
-        st7796_display.draw_text(15, 80, "[Status]:Init successful", st7796_display.GREEN, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(15, 90, "[Mode]:LoRa", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(0, 50, "SX1262 Info", st7796_display.PURPLE, st7796_display.WHITE, size=2, rotation=rotation)
+            st7796_display.draw_text(15, 80, "[Status]:Init successful", st7796_display.GREEN, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(15, 90, "[Mode]:LoRa", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
 
-        st7796_display.draw_text(14, 100, "[Frequency]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(105, 100, str(freq), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(140, 100, " MHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
+            st7796_display.draw_text(14, 100, "[Frequency]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(105, 100, str(freq), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(140, 100, " MHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
 
-        st7796_display.draw_text(15, 110, "[Bandwidth]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(105, 110, str(bw), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(140, 110, " KHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
+            st7796_display.draw_text(15, 110, "[Bandwidth]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(105, 110, str(bw), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(140, 110, " KHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
 
-        st7796_display.draw_text(15, 120, "[Output Power]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(126, 120, str(power), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(140, 120, " dB", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
+            st7796_display.draw_text(15, 120, "[Output Power]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(126, 120, str(power), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(140, 120, " dB", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
 
-        text_color = st7796_display.DARKGREEN if connection_flag == CONNECTED else st7796_display.RED if connection_flag == CONNECTING else st7796_display.BLUE
-        st7796_display.draw_text(15, 150, "[Connect]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(90, 150, 'CONNECTED    ' if connection_flag == CONNECTED else 'CONNECTING  ' if connection_flag == CONNECTING else 'UNCONNECTED', text_color, st7796_display.WHITE, size=1, rotation=0)
+            text_color = st7796_display.DARKGREEN if connection_flag == CONNECTED else st7796_display.RED if connection_flag == CONNECTING else st7796_display.BLUE
+            st7796_display.draw_text(15, 150, "[Connect]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(90, 150, 'CONNECTED    ' if connection_flag == CONNECTED else 'CONNECTING  ' if connection_flag == CONNECTING else 'UNCONNECTED', text_color, st7796_display.WHITE, size=1, rotation=rotation)
 
-        st7796_display.draw_text(15, 150, "[Connect]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(90, 150, 'CONNECTED    ' if connection_flag == CONNECTED else 'CONNECTING  ' if connection_flag == CONNECTING else 'UNCONNECTED', st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
+            st7796_display.draw_text(15, 150, "[Connect]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(90, 150, 'CONNECTED    ' if connection_flag == CONNECTED else 'CONNECTING  ' if connection_flag == CONNECTING else 'UNCONNECTED', st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
 
-        st7796_display.draw_text(15, 170, "<-------Send Info------->", st7796_display.ORANGE, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(15, 180, "[Send Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(110, 180, str(send_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
+            st7796_display.draw_text(15, 170, "<-------Send Info------->", st7796_display.ORANGE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(15, 180, "[Send Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(110, 180, str(send_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
 
-        st7796_display.draw_text(15, 200, "<------Receive Info------>", st7796_display.ORANGE, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(15, 210, "[Receive Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
-        st7796_display.draw_text(130, 210, str(receive_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=0)
-                
+            st7796_display.draw_text(15, 200, "<------Receive Info------>", st7796_display.ORANGE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(15, 210, "[Receive Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(130, 210, str(receive_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+        
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(50, 50, "SX1262 Info", st7796_display.PURPLE, st7796_display.WHITE, size=2, rotation=rotation)
+            st7796_display.draw_text(65, 80, "[Status]:Init successful", st7796_display.GREEN, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(65, 90, "[Mode]:LoRa", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+
+            st7796_display.draw_text(64, 100, "[Frequency]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(155, 100, str(freq), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(190, 100, " MHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+
+            st7796_display.draw_text(65, 110, "[Bandwidth]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(155, 110, str(bw), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(190, 110, " KHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+
+            st7796_display.draw_text(65, 120, "[Output Power]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(176, 120, str(power), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(190, 120, " dB", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+
+            text_color = st7796_display.DARKGREEN if connection_flag == CONNECTED else st7796_display.RED if connection_flag == CONNECTING else st7796_display.BLUE
+            st7796_display.draw_text(65, 150, "[Connect]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(140, 150, 'CONNECTED    ' if connection_flag == CONNECTED else 'CONNECTING  ' if connection_flag == CONNECTING else 'UNCONNECTED', text_color, st7796_display.WHITE, size=1, rotation=rotation)
+
+            st7796_display.draw_text(65, 150, "[Connect]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(1400, 150, 'CONNECTED    ' if connection_flag == CONNECTED else 'CONNECTING  ' if connection_flag == CONNECTING else 'UNCONNECTED', st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+
+            st7796_display.draw_text(65, 170, "<-------Send Info------->", st7796_display.ORANGE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(65, 180, "[Send Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(160, 180, str(send_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+
+            st7796_display.draw_text(65, 200, "<------Receive Info------>", st7796_display.ORANGE, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(65, 210, "[Receive Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(180, 210, str(receive_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+
     if connection_flag == CONNECTED:
         current_connection_flag = 1
-        st7796_display.draw_text(15, 40, "SX1262 Info", st7796_display.PURPLE, st7796_display.WHITE, size=2, rotation=1)
-        st7796_display.draw_text(15, 80, "[Status]:Init successful", st7796_display.GREEN, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(15, 90, "[Mode]:LoRa", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_text(15, 40, "SX1262 Info", st7796_display.PURPLE, st7796_display.WHITE, size=2, rotation=rotation)
+            st7796_display.draw_text(15, 80, "[Status]:Init successful", st7796_display.GREEN, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(15, 90, "[Mode]:LoRa", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 100, "[Frequency]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(105, 100, str(freq), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(140, 100, " MHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 110, "[Bandwidth]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(105, 110, str(bw), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(140, 110, " KHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 120, "[Output Power]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(126, 120, str(power), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(140, 120, " dB", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 130, "[Local MAC]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(100, 130, str(local_mac), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            text_color = st7796_display.YELLOW if connection_flag == CONNECTED else st7796_display.RED if connection_flag == CONNECTING else st7796_display.BLACK
+            st7796_display.draw_text(15, 150, "[Connect]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(90, 150, 'CONNECTED    ' if connection_flag == CONNECTED else 'CONNECTING  ' if connection_flag == CONNECTING else 'UNCONNECTED', text_color, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 160, "[Connect MAC]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(120, 160, str(Connecting_mac), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 180, "<-------Send Info------->", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(15, 190, "[Send Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(110, 190, str(send_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 210, "<------Receive Info------>", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(15, 220, "[Receive Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(130, 220, str(receive_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            rssi_str = f"{sx.getRSSI():.1f}"
+            st7796_display.draw_text(15, 230, "[Receive RSSI]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(130, 230, f"{rssi_str} dBm", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            snr_str = f"{sx.getSNR():.1f}"
+            st7796_display.draw_text(15, 240, "[Receive SNR]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(130, 240, f"{snr_str} dBm", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
         
-        st7796_display.draw_text(15, 100, "[Frequency]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(105, 100, str(freq), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(140, 100, " MHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        
-        st7796_display.draw_text(15, 110, "[Bandwidth]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(105, 110, str(bw), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(140, 110, " KHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        
-        st7796_display.draw_text(15, 120, "[Output Power]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(126, 120, str(power), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(140, 120, " dB", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        
-        st7796_display.draw_text(15, 130, "[Local MAC]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(100, 130, str(local_mac), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        
-        text_color = st7796_display.YELLOW if connection_flag == CONNECTED else st7796_display.RED if connection_flag == CONNECTING else st7796_display.BLACK
-        st7796_display.draw_text(15, 150, "[Connect]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(90, 150, 'CONNECTED    ' if connection_flag == CONNECTED else 'CONNECTING  ' if connection_flag == CONNECTING else 'UNCONNECTED', text_color, st7796_display.WHITE, size=1, rotation=1)
-        
-        st7796_display.draw_text(15, 160, "[Connect MAC]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(120, 160, str(Connecting_mac), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        
-        st7796_display.draw_text(15, 180, "<-------Send Info------->", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(15, 190, "[Send Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(110, 190, str(send_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        
-        st7796_display.draw_text(15, 210, "<------Receive Info------>", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(15, 220, "[Receive Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(130, 220, str(receive_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        
-        rssi_str = f"{sx.getRSSI():.1f}"
-        st7796_display.draw_text(15, 230, "[Receive RSSI]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(130, 230, f"{rssi_str} dBm", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        
-        snr_str = f"{sx.getSNR():.1f}"
-        st7796_display.draw_text(15, 240, "[Receive SNR]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
-        st7796_display.draw_text(130, 240, f"{snr_str} dBm", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=1)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_text(15, 40, "SX1262 Info", st7796_display.PURPLE, st7796_display.WHITE, size=2, rotation=rotation)
+            st7796_display.draw_text(15, 80, "[Status]:Init successful", st7796_display.GREEN, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(15, 90, "[Mode]:LoRa", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 100, "[Frequency]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(105, 100, str(freq), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(140, 100, " MHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 110, "[Bandwidth]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(105, 110, str(bw), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(140, 110, " KHz", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 120, "[Output Power]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(126, 120, str(power), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(140, 120, " dB", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 130, "[Local MAC]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(100, 130, str(local_mac), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            text_color = st7796_display.YELLOW if connection_flag == CONNECTED else st7796_display.RED if connection_flag == CONNECTING else st7796_display.BLACK
+            st7796_display.draw_text(15, 150, "[Connect]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(90, 150, 'CONNECTED    ' if connection_flag == CONNECTED else 'CONNECTING  ' if connection_flag == CONNECTING else 'UNCONNECTED', text_color, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 160, "[Connect MAC]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(120, 160, str(Connecting_mac), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 180, "<-------Send Info------->", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(15, 190, "[Send Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(110, 190, str(send_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            st7796_display.draw_text(15, 210, "<------Receive Info------>", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(15, 220, "[Receive Data]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(130, 220, str(receive_data), st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            rssi_str = f"{sx.getRSSI():.1f}"
+            st7796_display.draw_text(15, 230, "[Receive RSSI]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(130, 230, f"{rssi_str} dBm", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            
+            snr_str = f"{sx.getSNR():.1f}"
+            st7796_display.draw_text(15, 240, "[Receive SNR]:", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+            st7796_display.draw_text(130, 240, f"{snr_str} dBm", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
     
     # Error counting logic
     if connection_flag == CONNECTING:
@@ -964,7 +1314,10 @@ def Original_Test_8_Loop():
     if current_connection_flag != previous_connection_flag:
         st7796_display.fillScreen(0, 0, st7796_display.WHITE)
         GFX_Print_1()
-        st7796_display.draw_button(360, 200, 45, 100, st7796_display.PALERED, "Reconnect", st7796_display.WHITE, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_button(360, 200, 45, 100, st7796_display.PALERED, "Reconnect", st7796_display.WHITE, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_button(110, 400, 45, 100, st7796_display.PALERED, "Reconnect", st7796_display.WHITE, rotation=rotation)
         previous_connection_flag = current_connection_flag
         
 
@@ -978,7 +1331,15 @@ def Original_Test_8_Loop():
     time.sleep(0.5)  # Adjust the sleep as necessary
     
 def Original_Test_Loop():
-    global rotated_x1,rotated_x2,rotated_x3,rotated_x4,rotated_x5,rotated_y1,rotated_y2,rotated_y3,rotated_y4,rotated_y5,Skip_Current_Test, HTML_Relay1_Flag,eth_relay_info,connection_flag, dev, polling_rate, counter, cycle_time, isConnect, last_receive_time,can_isConnect,is_232Connect,is_485Connect,uart1,uart2,RS485_1_Count,RS485_2_Count
+    global rotated_x1,rotated_x2,rotated_x3,rotated_x4,rotated_x5, \
+           rotated_y1,rotated_y2,rotated_y3,rotated_y4,rotated_y5, \
+           Skip_Current_Test, HTML_Relay1_Flag,eth_relay_info, \
+           connection_flag, dev, polling_rate, counter, cycle_time, \
+           isConnect, last_receive_time,can_isConnect,is_232Connect, \
+           is_485Connect, uart1, uart2, RS485_1_Count, RS485_2_Count, \
+            error_count, previous_connection_flag,sx, speed, \
+            remaining_size, file_size, total_time, average_speed,\
+            downloaded_size,rotated_x,rotated_y
     
     gc.collect()
     GFX_Print_TEST("Touch Test")
@@ -986,6 +1347,9 @@ def Original_Test_Loop():
     if Skip_Current_Test is not True:
         Original_Test_1()
         while True:
+            if button_rotation():
+                st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+                Original_Test_1()
             GFX_Print_Touch_Info_Loop()
             if try_button():
                 rotated_x1, rotated_y1 = (0, 0)
@@ -1005,12 +1369,20 @@ def Original_Test_Loop():
     gc.collect()                
                     
     # LCD Backlight Test
-    GFX_Print_TEST("LCD Backlight Test")
+    GFX_Print_TEST("Backlight Test")
     if Skip_Current_Test is not True:
+        st7796_display.backlight = machine.PWM(st7796_display.backlight)
         Original_Test_2()
         while True:
+            if button_rotation():
+                st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+                if rotation==0 or rotation==2:
+                    st7796_display.draw_text(150, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
+                elif rotation==1 or rotation==3:
+                    st7796_display.draw_text(70, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
+                GFX_Print_1()
             if try_button():
-                GFX_Print_TEST("LCD Backlight Test")
+                GFX_Print_TEST("Backlight Test")
                 Original_Test_2()
             if next_button():
                 break
@@ -1020,6 +1392,13 @@ def Original_Test_Loop():
     if Skip_Current_Test is not True:
         Original_Test_3()
         while True:
+            if button_rotation():
+                st7796_display.fillScreen(0, 0, st7796_display.BLACK)
+                if rotation==0 or rotation==2:
+                    st7796_display.draw_text(150, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
+                elif rotation==1 or rotation==3:
+                    st7796_display.draw_text(70, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
+                GFX_Print_1()
             if try_button():
                 GFX_Print_TEST("LCD Color Test")
                 Original_Test_3()
@@ -1030,8 +1409,32 @@ def Original_Test_Loop():
     GFX_Print_TEST("WIFI STA Test")
     if Skip_Current_Test is not True:
         Original_Test_4()
+        gc.collect()
         WIFI_HTTP_Download_File()
         while True:
+            if button_rotation():
+                st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+                if rotation==0 or rotation==2:
+                    st7796_display.draw_text(0, 74, f"Speed: {speed:.2f} KB/s       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(0, 82, f"Size: {remaining_size / 1024 / 1024:.2f} MB       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(0, 50, "Starting file download...", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(0, 58, f"File size: {file_size / 1024 / 1024:.2f} MB      ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(0, 98, "Completed", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(0, 106, f"Time: {total_time:.2f} s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    average_speed = (downloaded_size / 1024) / total_time if total_time > 0 else 0
+                    st7796_display.draw_text(0, 114, f"Speed: {average_speed:.2f} KB/s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(150, 140, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
+                elif rotation==1 or rotation==3:
+                    st7796_display.draw_text(50, 74, f"Speed: {speed:.2f} KB/s       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(50, 82, f"Size: {remaining_size / 1024 / 1024:.2f} MB       ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(50, 50, "Starting file download...", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(50, 58, f"File size: {file_size / 1024 / 1024:.2f} MB      ", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(50, 98, "Completed", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(50, 106, f"Time: {total_time:.2f} s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    average_speed = (downloaded_size / 1024) / total_time if total_time > 0 else 0
+                    st7796_display.draw_text(50, 114, f"Speed: {average_speed:.2f} KB/s", st7796_display.BLACK, st7796_display.WHITE, size=1, rotation=rotation)
+                    st7796_display.draw_text(70, 180, "FINISH", st7796_display.ORANGE, st7796_display.WHITE, size=4, rotation=rotation)
+                GFX_Print_1()
             if try_button():
                 GFX_Print_TEST("WIFI STA Test")
                 Original_Test_4()
@@ -1040,7 +1443,7 @@ def Original_Test_Loop():
                 break
             
     gc.collect()
-    GFX_Print_TEST("RS485232CAN Test") 
+    GFX_Print_TEST("RS485232CAN") 
     if Skip_Current_Test is not True:
         # Define CAN device initialization
         Original_Test_5()
@@ -1064,8 +1467,11 @@ def Original_Test_Loop():
             # Sleep for a short time to simulate polling delay (10ms)
             time.sleep(0.01)
             GFX_Print_RS485CAN_Info_Loop()
+            if button_rotation():
+                st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+                Original_Test_5()
             if try_button():
-                GFX_Print_TEST("RS485232CAN Test")
+                GFX_Print_TEST("RS485232CAN")
                 Original_Test_5()
             if next_button():
                 break
@@ -1083,22 +1489,51 @@ def Original_Test_Loop():
             cable_link_status()
             
     gc.collect()
-    GFX_Print_TEST("SX1262 callback distance test")
+    GFX_Print_TEST("SX1262 test")
     if Skip_Current_Test is not True:
         Original_Test_8()
         st7796_display.fillScreen(0, 0, st7796_display.WHITE)
         GFX_Print_1()
-        st7796_display.draw_button(360, 200, 45, 100, st7796_display.PALERED, "Reconnect", st7796_display.WHITE, rotation=rotation)
+        if rotation==0 or rotation==2:
+            st7796_display.draw_button(360, 200, 45, 100, st7796_display.PALERED, "Reconnect", st7796_display.WHITE, rotation=rotation)
+        elif rotation==1 or rotation==3:
+            st7796_display.draw_button(110, 400, 45, 100, st7796_display.PALERED, "Reconnect", st7796_display.WHITE, rotation=rotation)
+        previous_connection_flag = None
+        last_receive_time = time.ticks_ms()
         while True:
             Original_Test_8_Loop()
+            if button_rotation():
+                st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+                GFX_Print_1()
+                if rotation==0 or rotation==2:
+                    st7796_display.draw_button(360, 200, 45, 100, st7796_display.PALERED, "Reconnect", st7796_display.WHITE, rotation=rotation)
+                elif rotation==1 or rotation==3:
+                    st7796_display.draw_button(110, 400, 45, 100, st7796_display.PALERED, "Reconnect", st7796_display.WHITE, rotation=rotation)
             if try_button():
-                GFX_Print_TEST("SX1262 callback distance test")
-                Original_Test_8()
+                GFX_Print_TEST("SX1262 test")
             if next_button():
                 break
             if new_button():
                 connection_flag = CONNECTING
-    gc.collect()       
+                
+    gc.collect()
+    st7796_display.fillScreen(0, 0, st7796_display.WHITE)
+    st7796_display.blit_buffer(photo.BMPBuffer1, 0, 50, 480, 222, rotation=2)
+    current_image = True 
+    while True:
+        touch_click()
+        if rotation==0 or rotation==2:
+            if 0<rotated_x<480 and 0<rotated_y<320:
+                if current_image:
+                    st7796_display.blit_buffer(photo.BMPBuffer2, 0, 50, 480, 222, rotation=rotation)
+                else:
+                    st7796_display.blit_buffer(photo.BMPBuffer1, 0, 50, 480, 222, rotation=rotation)
+                current_image = not current_image
+                time.sleep(0.5)
+                rotated_x = 0
+                rotated_y = 0
+        if button_rotation():
+            print("Rotation")
             
     
 def setup():
@@ -1115,3 +1550,4 @@ if __name__ == "__main__":
     setup()   
     while True:
         Original_Test_Loop()
+

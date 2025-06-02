@@ -320,3 +320,21 @@ class ST7796:
         self.cs.value(0)  # 启动 SPI 通信
         self.spi.write(image_data)  # 发送图像数据
         self.cs.value(1)  # 结束 SPI 通信
+        
+    def blit_buffer(self, buffer, x, y, width, height ,rotation=0):
+        """
+        Copy buffer to display at the given location.
+
+        Args:
+            buffer (bytes): Data to copy to display
+            x (int): Top left corner x coordinate
+            y (int): Top left corner y coordinate
+            width (int): Width
+            height (int): Height
+        """
+        self.rotation = rotation
+        self.set_window(x, y, x + width - 1, y + height - 1)  # Set the window to the specified area
+        self.dc.value(1)  # Data mode
+        self.cs.value(0)  # Start SPI communication
+        self.spi.write(buffer)  # Write the image data from the buffer
+        self.cs.value(1)  # End SPI communication
