@@ -3,7 +3,7 @@
  * @Description: None
  * @Author: LILYGO
  * @Date: 2025-05-12 15:13:14
- * @LastEditTime: 2025-05-23 17:40:18
+ * @LastEditTime: 2025-06-03 09:10:18
  * @License: GPL 3.0
 -->
 <h1 align = "center">T-Connect-Pro-MicroPython</h1>
@@ -13,7 +13,7 @@
 ## 版本迭代:
 | Version                               | Update date                       |
 | :-------------------------------: | :-------------------------------: |
-| T-Connect-Pro-Micropython_V1.0          | 2025-05-23                  |
+| T-Connect-Pro-Micropython_V1.0          | 2025-06-03                  |
 
 ## 购买链接
 

@@ -3,7 +3,7 @@
  * @Description: None
  * @Author: LILYGO
  * @Date: 2025-05-12 15:13:14
- * @LastEditTime: 2025-05-26 17:40:18
+ * @LastEditTime: 2025-06-03 09:10:18
  * @License: GPL 3.0
 -->
 
@@ -14,7 +14,7 @@
 ## VersionIteration:
 | Version                              | Update date                       |
 | :-------------------------------: | :-------------------------------: |
-| T-Connect-Pro-Micropython_V1.0        | 2025-05-23               |
+| T-Connect-Pro-Micropython_V1.0        | 2025-06-03     |
 
 ## PurchaseLink
 
