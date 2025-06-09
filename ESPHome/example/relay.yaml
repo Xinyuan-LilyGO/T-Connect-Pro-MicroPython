@@ -1,0 +1,11 @@
+switch:
+  - platform: gpio
+    name: "Relay"
+    pin: 8
+    id: relay  # Ensure this ID is present
+
+# Automatically toggle relay every second
+interval:
+  - interval: 1s
+    then:
+      - switch.toggle: relay  # Reference the defined ID

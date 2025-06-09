@@ -1,0 +1,130 @@
+psram:
+  mode: octal
+  speed: 80MHz
+
+spi:
+  clk_pin: GPIO12
+  mosi_pin: GPIO11
+  miso_pin: GPIO13
+  id: tft_spi
+
+color:
+  - id: my_red
+    red: 100%
+    green: 0%
+    blue: 0%
+  - id: my_green
+    red: 0%
+    green: 100%
+    blue: 0%
+  - id: my_blue
+    red: 0%
+    green: 0%
+    blue: 100%
+  - id: my_white
+    red: 100%
+    green: 100%
+    blue: 100%
+  - id: my_black
+    red: 0%
+    green: 0%
+    blue: 0%
+
+font:
+  - file: "gfonts://Roboto"
+    id: my_font
+    size: 30
+
+globals:
+  - id: touched
+    type: int
+    initial_value: '0'
+  - id: touch_x
+    type: int
+    initial_value: '0'
+  - id: touch_y
+    type: int
+    initial_value: '0'
+
+i2c:
+  id: i2c0
+  sda: GPIO39
+  scl: GPIO40
+
+display:
+  - platform: ili9xxx
+    id: my_display_id
+    model: ST7796
+    cs_pin: GPIO21
+    dc_pin: GPIO41
+    data_rate: 20MHz
+    rotation: 270
+    invert_colors: True
+    color_palette: 8BIT
+    lambda: |-
+      if (id(touched) == 1) {
+        it.print(150, 100, id(my_font), id(my_white), "TOUCH");
+        it.printf(150, 150, id(my_font), id(my_white), "X: %d", id(touch_x));
+        it.printf(150, 180, id(my_font), id(my_white), "Y: %d", id(touch_y));
+      } else if (id(touched) == 2) {
+        it.print(150, 100, id(my_font), id(my_white), "UPDATE");
+        it.printf(150, 150, id(my_font), id(my_white), "X: %d", id(touch_x));
+        it.printf(150, 180, id(my_font), id(my_white), "Y: %d", id(touch_y));
+      } else if (id(touched) == 0) {
+        it.print(150, 100, id(my_font), id(my_white), "RELEASE");
+      }
+
+output:
+  - platform: ledc
+    pin: GPIO46
+    id: backlight_pwm
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "Display Backlight"
+    id: back_light
+    restore_mode: ALWAYS_ON
+
+touchscreen:
+  platform: cst226
+  id: my_touchscreen
+  i2c_id: i2c0
+  interrupt_pin: GPIO3
+  reset_pin: GPIO47
+  transform:
+    mirror_x: false
+    mirror_y: false
+    swap_xy: false
+  on_touch:
+    then:
+      - lambda: |-
+          //ESP_LOGI("touch", "Touched at x=%d, y=%d", (int) touch.x, (int) touch.y);
+          id(touched) = 1;
+          id(touch_x) = 480 - ((int) touch.y * 480) / 320;
+          id(touch_y) = ((int) touch.x * 320) / 480;
+          id(my_display_id).update();
+
+  on_update:
+    then:
+      - lambda: |-
+          // There may be multi-touch in "touches". Only the first one is taken here
+          if (!touches.empty()) {
+            // You can either take the first one or traverse all of them by yourself
+            auto &t = touches[0];
+
+            // state==0 indicates that it has expired; 1= New contact point; 2= Moving contact
+            if (t.state <= 2) {
+              id(touched) = 2;
+              id(touch_x) = 480 - (t.y * 480) / 320;
+              id(touch_y) = (t.x * 320) / 480;
+              id(my_display_id).update();
+              //ESP_LOGD("touch", "Update x=%d y=%d", id(touch_x), id(touch_y));
+            }
+          }
+
+  on_release:
+    then:
+      - lambda: |-
+          id(touched) = 0;
+          id(my_display_id).update();

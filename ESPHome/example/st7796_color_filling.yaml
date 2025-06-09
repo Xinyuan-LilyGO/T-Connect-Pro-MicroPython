@@ -1,0 +1,64 @@
+psram:
+  mode: octal
+  speed: 80MHz
+
+spi:
+  clk_pin: GPIO12
+  mosi_pin: GPIO11
+  miso_pin: GPIO13
+  id: tft_spi
+
+color:
+  - id: my_red
+    red: 100%
+    green: 0%
+    blue: 0%
+  - id: my_green
+    red: 0%
+    green: 100%
+    blue: 0%
+  - id: my_blue
+    red: 0%
+    green: 0%
+    blue: 100%
+  - id: my_white
+    red: 100%
+    green: 100%
+    blue: 100%
+  - id: my_black
+    red: 0%
+    green: 0%
+    blue: 0%
+
+display:
+  - platform: ili9xxx
+    model: ST7796
+    cs_pin: GPIO21
+    dc_pin: GPIO41
+    data_rate: 20MHz
+    rotation: 270
+    invert_colors: True
+    color_palette: 8BIT
+    # color_order: RGB
+    # show_test_card: true
+    update_interval: 1s  
+    lambda: |-
+      static int color_index = 0;
+      switch(color_index) {
+        case 0: it.fill(id(my_red)); break;
+        case 1: it.fill(id(my_green)); break;
+        case 2: it.fill(id(my_blue)); break;
+      }
+      color_index = (color_index + 1) % 3;
+
+output:
+  - platform: ledc
+    pin: GPIO46
+    id: backlight_pwm
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "Display Backlight"
+    id: back_light
+    restore_mode: ALWAYS_ON
