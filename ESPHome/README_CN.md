@@ -44,7 +44,7 @@ ESPHome是一个简单但功能强大的系统，允许用户使用YAML配置文
 
 [supported]: https://img.shields.io/badge/-supported-green "example"
 
-### 在VMware上搭建Home Assistant(ESPHome)
+## 在VMware上搭建Home Assistant(ESPHome)
 1. 从[Home Assistant](https://www.home-assistant.io/installation/windows)官方网站，下载VMware专用的HAOS系统。
 
    ![1](./image/0-1.png)
@@ -271,7 +271,7 @@ ESPHome是一个简单但功能强大的系统，允许用户使用YAML配置文
 
     
 
-### 在手机上使用Home Assistant
+## 在手机上使用Home Assistant
 
 1. 在手机应用商店中下载安装Home Assistant。
 
