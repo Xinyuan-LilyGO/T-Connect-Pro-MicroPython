@@ -18,8 +18,8 @@
 ## 目录
 - [描述](#描述)
 - [软件部署](#软件部署)
-  - [在VMware上搭建Home Assistant(ESPHome)]( #在VMware上搭建Home Assistant(ESPHome) )
-  - [在手机上使用Home Assistant]( #在手机上使用Home Assistant )
+  - 在VMware上搭建Home Assistant(ESPHome)
+  - 在手机上使用Home Assistant
 - [相关测试](#相关测试)
 - [常见问题](#常见问题)
 - [项目](#项目)
