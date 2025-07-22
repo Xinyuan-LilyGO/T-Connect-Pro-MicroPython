@@ -21,8 +21,8 @@
 
 - [Describe](#Describe)
 - [Preview](#Preview)
-  - [Building Home Assistant(ESPHome) on VMware](# Building Home Assistant(ESPHome) on VMware)
-  - [Use Home Assistant on the mobile phone](#Use Home Assistant on the mobile phone)
+  - Building Home Assistant(ESPHome) on VMware
+  - Use Home Assistant on the mobile phone
 - [RelatedTests](#RelatedTests)
 - [FAQ](#FAQ)
 
