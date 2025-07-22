@@ -140,7 +140,7 @@ T-Connect-Pro基于主控芯片ESP32S3，由3层板子堆叠组合而成的产�
 6. 打开VisualStudioCode终端（或者使用<kbd>Ctrl</kbd>+<kbd>`</kbd>），输入命令安装esptools工具。
 
    ```
-   pip install esptools
+   pip install esptool
    ```
 
 7. 擦除闪存，在终端输命令。
