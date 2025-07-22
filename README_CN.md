@@ -140,7 +140,7 @@ T-Connect-Pro基于主控芯片ESP32S3，由3层板子堆叠组合而成的产�
 6. 打开VisualStudioCode终端（或者使用<kbd>Ctrl</kbd>+<kbd>`</kbd>），输入命令安装esptools工具。
 
    ```
-   pip install esptools
+   pip install esptool
    ```
 
 7. 擦除闪存，在终端输命令。
@@ -156,17 +156,17 @@ T-Connect-Pro基于主控芯片ESP32S3，由3层板子堆叠组合而成的产�
 8. 上传MicroPython固件。
 
    ```
-   python -m esptool --chip esp32s3 --port COMX --baud 460800 --before=default_reset --after=hard_reset write_flash -z 0x0 D:\T-Connect-Pro\firmware\T-Connect-Pro_MicroPython_firmware_V1.0.bin
+   python -m esptool --chip esp32s3 --port COMX --baud 460800 --before=default_reset --after=hard_reset write_flash -z 0x0 D:\T-Connect-Pro\firmware\T-Connect-Pro_LVGL_MicroPython_firmware_V1.0
    ```
 
    注意：
 
    1. COMX为端口号，更改为电脑对应的端口号。
-   2. D:\T-Connect-Pro\firmware\T-Connect-Pro_MicroPython_firmware_V1.0.bin为固件路径，更改为对应存放路径。
+   2. D:\T-Connect-Pro\firmware\T-Connect-Pro_LVGL_MicroPython_firmware_V1.0为固件路径，更改为对应存放路径。
 
 9. 点击左下角的“<kbd>[设备连接/断开](image/1.png)</kbd>”，然后点击上方弹出的窗口“<kbd>[COMX](image/2.png)</kbd>”进行串口连接，右下角弹出“<kbd>[连接成功](image/3.png)</kbd>”及连接完成。
 
-10. 打开代码后，点击左下角的“<kbd>[▶](image/4.png)</kbd>”运行程序（或者在代码处点击鼠标右键选择“<kbd>[直接在设备上运行该MIC肉Python文件](image/5.png)</kbd>”，或者使用<kbd>Alt</kbd>+<kbd>Q</kbd>），如果要停止程序则点击左下角的“<kbd>[⏹](image/6.png)</kbd>”停止运行程序。
+10. 打开代码后，点击左下角的“<kbd>[▶](image/4.png)</kbd>”运行程序（或者在代码处点击鼠标右键选择“<kbd>[直接在设备上运行该MicroPython文件](image/5.png)</kbd>”，或者使用<kbd>Alt</kbd>+<kbd>Q</kbd>），如果要停止程序则点击左下角的“<kbd>[⏹](image/6.png)</kbd>”停止运行程序。**（如果需要在板子上自动运行程序，请将代码复制到"exampels"文件夹下的"[main.py](examples/main.py)"文件中保存，鼠标左键选中"main.py"文件，点击鼠标右键选择"[下载该文件/文件夹到设备上](image/7.png)"，然后按下板子上的复位键即可自动运行程序。）**
 
 ## 引脚总览
 

@@ -130,7 +130,7 @@ T-Connect-Pro is a product based on the ESP32S3 main control chip, consisting of
 ### RT-Thread MicroPython
 1. Install [Python](https://www.python.org/downloads/) (according to you to download the corresponding operating system version, suggest to download version 3.7 or later), MicroPython requirement 3. X version, if you have already installed, you can skip this step).
 
-2. Install[VisualStudioCode](https://code.visualstudio.com/Download),Choose installation based on your system type.
+2. Install [VisualStudioCode](https://code.visualstudio.com/Download),Choose installation based on your system type.
 
 3. Open the "Extension" section of the Visual Studio Code software sidebar(Alternatively, use "<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>" to open the extension),Search for the "RT-Thread MicroPython" extension and download it.
 
@@ -141,7 +141,7 @@ T-Connect-Pro is a product based on the ESP32S3 main control chip, consisting of
 6. Open the VisualStudioCode terminal (or use <kbd>Ctrl</kbd>+<kbd>`</kbd>), and enter the command to install the esptools tool.
 
    ```
-   pip install esptools
+   pip install esptool
    ```
 
 7. Erase the flash memory and enter commands in the terminal.
@@ -157,17 +157,17 @@ T-Connect-Pro is a product based on the ESP32S3 main control chip, consisting of
 8. Upload the MicroPython firmware.
 
    ```
-   python -m esptool --chip esp32s3 --port COMX --baud 460800 --before=default_reset --after=hard_reset write_flash -z 0x0 D:\T-Connect-Pro\firmware\T-Connect-Pro_MicroPython_firmware_V1.0.bin
+   python -m esptool --chip esp32s3 --port COMX --baud 460800 --before=default_reset --after=hard_reset write_flash -z 0x0 D:\T-Connect-Pro\firmware\T-Connect-Pro_LVGL_MicroPython_firmware_V1.0
    ```
 
    Note：
 
    1. COMX is the port number. Change it to the port number corresponding to your computer.
-   2. D:\T-Connect-Pro\firmware\T-Connect-Pro_MicroPython_firmware_V1.0.bin is the firmware path. Change it to the corresponding storage path.
+   2. D:\T-Connect-Pro\firmware\T-Connect-Pro_LVGL_MicroPython_firmware_V1.0 is the firmware path. Change it to the corresponding storage path.
 
 9. Click on "<kbd>[Device Connected/Disconnected](image/1.png)</kbd>" at the lower left corner, and then click on the pop-up window "<kbd>[COMX](image/2.png)</kbd>" at the top to connect the serial port. A pop-up pops up at the lower right corner saying "<kbd>[Connection successful](image/3.png)</kbd>" and the connection is complete.
 
-10. After opening the code, click on“<kbd>[▶](image/4.png)</kbd>”at the lower left corner to run the program“<kbd>[Run this MicroPython file directly on the device](image/5.png)</kbd>”，Or use the<kbd>Alt</kbd>+<kbd>Q</kbd>），if you want to stop the program, click on the lower left corner of the“<kbd>[⏹](image/6.png)</kbd>”stop running the program.
+10. After opening the code, click on“<kbd>[▶](image/4.png)</kbd>”at the lower left corner to run the program“<kbd>[Run this MicroPython file directly on the device](image/5.png)</kbd>”，Or use the<kbd>Alt</kbd>+<kbd>Q</kbd>），if you want to stop the program, click on the lower left corner of the“<kbd>[⏹](image/6.png)</kbd>”stop running the program.**(If you need to run the program automatically on the board, please copy the code to the "[main.py](examples/main.py)" file under the "exampels" folder and save it. Select the "main.py" file with the left mouse button. Right-click the mouse and select "[Download this file/folder to device](image/7.png)", then press the reset button on the board to run the program automatically.)**
 
 ## PinOverview
 
