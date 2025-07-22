@@ -141,7 +141,7 @@ T-Connect-Pro is a product based on the ESP32S3 main control chip, consisting of
 6. Open the VisualStudioCode terminal (or use <kbd>Ctrl</kbd>+<kbd>`</kbd>), and enter the command to install the esptools tool.
 
    ```
-   pip install esptools
+   pip install esptool
    ```
 
 7. Erase the flash memory and enter commands in the terminal.
