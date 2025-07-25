@@ -163,7 +163,7 @@ T-Connect-Pro基于主控芯片ESP32S3，由3层板子堆叠组合而成的产�
 
    1. COMX为端口号，更改为电脑对应的端口号。
    2. D:\T-Connect-Pro\firmware\T-Connect-Pro_LVGL_MicroPython_firmware_V1.0为固件路径，更改为对应存放路径。
-   3. **如果需要自制MicroPython固件，请参考[教程](./make firmware/README.md)进行操作。**
+   3. **如果需要自制MicroPython固件，请参考[教程](./make_firmware/README.md)进行操作。**
 
 9. 点击左下角的“<kbd>[设备连接/断开](image/1.png)</kbd>”，然后点击上方弹出的窗口“<kbd>[COMX](image/2.png)</kbd>”进行串口连接，右下角弹出“<kbd>[连接成功](image/3.png)</kbd>”及连接完成。
 
