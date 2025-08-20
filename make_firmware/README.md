@@ -114,13 +114,13 @@ Enter the password you just set:
 1. Execute the following instructions in sequence in the command line mode of the linux subsystem:
 
    ```
-   git clone https://gitee.com/EspressifSystems/esp-gitee-tools.git
+   git clone https://github.com/Xinyuan-LilyGO/esp-gitee-tools.git
    ```
 
    ![21](./images/21.png)
 
    ```
-   git clone https://gitee.com/EspressifSystems/esp-idf.git
+   git clone https://github.com/Xinyuan-LilyGO/esp-idf.git
    ```
 
    ![23](./images/23.png)
@@ -244,7 +244,7 @@ Enter the password you just set:
 
    ![40](./images/40.png)
 
-   Make completed:
+   Make completed：
 
    ![41](./images/41.png)
 
@@ -252,6 +252,6 @@ Enter the password you just set:
 
    ![41-1](./images/41-1.png)
 
-7. In the file, find the "firmware.bin" file, right-click the mouse, and select "Download" to download it to your computer. 
+7. In the file, find the "firmware.bin" file, right-click the mouse, and select "Download" to download it to your computer.
 
    ![42](./images/42.png)
